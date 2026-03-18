@@ -6,7 +6,7 @@ import datetime
 import requests
 
 # 1. CONFIGURACIÓN Y DISEÑO
-st.set_page_config(page_title="AI-lino Premium & Community", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI.lino Premium & Community", page_icon="🧠", layout="wide")
 
 if 'community_strategies' not in st.session_state:
     st.session_state['community_strategies'] = [
@@ -49,7 +49,7 @@ if modo_presentador:
 header_title_col, header_btn_col = st.columns([8, 2])
 
 with header_title_col:
-    st.title("🧠 AI-lino")
+    st.title("🧠 AI.lino")
     st.markdown("### Simulador de Mercado, Análisis VIP y Comunidad de Estrategias")
 
 with header_btn_col:
@@ -81,10 +81,10 @@ if "Comunidad" not in modo:
         with c2: total_inv = st.number_input("Costo Total Invertido:", min_value=0.01, value=5000.0)
 
 if "Comunidad" not in modo:
-    if st.button("📊 Ejecutar Motor AI-lino"):
+    if st.button("📊 Ejecutar Motor AI.lino"):
         with st.spinner("Procesando datos del mercado en servidores seguros..."):
             try:
-                # 1. Descarga de gráficas nativa (sin disfraz manual, como pidió el sistema)
+                # 1. Descarga de gráficas nativa
                 stock = yf.Ticker(ticker_limpio)
                 df_y = stock.history(period="1y")
                 
@@ -113,7 +113,7 @@ if "Comunidad" not in modo:
                     techo_y = df_y['High'].max()
                     piso_m = df_m['Low'].min()
                     
-                    # --- CONEXIÓN VIP FINNHUB PARA PRECIOS EXACTOS ---
+                    # --- CONEXIÓN VIP FINNHUB ---
                     API_KEY = "D6t23k1r01qoqoirutj0d6t23k1r01qoqoirutjg"
                     try:
                         finnhub_quote = requests.get(f"https://finnhub.io/api/v1/quote?symbol={ticker_limpio}&token={API_KEY}", timeout=3).json()
@@ -138,13 +138,13 @@ if "Comunidad" not in modo:
                             f"💼 Con tu capital de **${capital_disponible:,.2f}**, te alcanza para comprar **{acciones_posibles:.4f}** acciones (fracciones).")
                     
                     if "Explorador" in modo:
-                        st.markdown(f"## 📡 Tablero AI-lino: {nombre_empresa}")
+                        st.markdown(f"## 📡 Tablero AI.lino: {nombre_empresa}")
                         g1, g2 = st.columns(2)
                         with g1: st.write("**Histórico (1 Año)**"); st.line_chart(df_y['Close'])
                         with g2: st.write("**Radar (Último Mes)**"); st.line_chart(df_m['Close'])
                         st.info("💡 Desbloquea gráficas interactivas, Reportes Ejecutivos y el Asesor de Riesgos en el **Modo Portafolio (Suite Premium)**.")
                     else:
-                        st.markdown(f"## 💎 Suite VIP AI-lino: {nombre_empresa}")
+                        st.markdown(f"## 💎 Suite VIP AI.lino: {nombre_empresa}")
                         actual_val, precio_promedio = precio_actual * cant, total_inv / cant if cant > 0 else 0
                         rend = ((actual_val - total_inv) / total_inv) * 100
                         m1, m2, m3, m4 = st.columns(4)
@@ -181,7 +181,7 @@ if "Comunidad" not in modo:
                             st.markdown("</div>", unsafe_allow_html=True)
 
                     st.markdown("---")
-                    st.markdown("### 🎯 Sala de Simulación AI-lino")
+                    st.markdown("### 🎯 Sala de Simulación AI.lino")
                     precio_pensado = st.number_input("🤔 Simula escenario. Entrada Ideal:", value=float(precio_actual), step=0.0001, format="%0.4f")
                     potencial_subida = ((techo_y - precio_pensado) / precio_pensado) * 100
                     riesgo_caida = ((precio_pensado - piso_m) / precio_pensado) * 100 if precio_pensado > piso_m else 0
@@ -222,7 +222,7 @@ if "Comunidad" not in modo:
             except Exception as e:
                 st.error(f"⚠️ Error al conectar con el servidor: {e}")
 else:
-    st.markdown("## 🤝 Comunidad de Estrategias AI-lino")
+    st.markdown("## 🤝 Comunidad de Estrategias AI.lino")
     st.markdown("Aquí puedes interactuar y compartir tus mejores jugadas con la comunidad. Si eres un operador experimentado, ¡esta es tu zona!")
 
     col_comm1, col_comm2 = st.columns([1, 2])
