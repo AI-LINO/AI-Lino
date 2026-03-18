@@ -84,7 +84,6 @@ if "Comunidad" not in modo:
     if st.button("📊 Ejecutar Motor AI.lino"):
         with st.spinner("Procesando datos del mercado en servidores seguros..."):
             try:
-                # 1. Descarga de gráficas nativa
                 stock = yf.Ticker(ticker_limpio)
                 df_y = stock.history(period="1y")
                 
@@ -113,7 +112,6 @@ if "Comunidad" not in modo:
                     techo_y = df_y['High'].max()
                     piso_m = df_m['Low'].min()
                     
-                    # --- CONEXIÓN VIP FINNHUB ---
                     API_KEY = "D6t23k1r01qoqoirutj0d6t23k1r01qoqoirutjg"
                     try:
                         finnhub_quote = requests.get(f"https://finnhub.io/api/v1/quote?symbol={ticker_limpio}&token={API_KEY}", timeout=3).json()
@@ -128,14 +126,13 @@ if "Comunidad" not in modo:
                         descripcion = "Información corporativa cargada vía terminal segura."
                     
                     pe_ratio = "Optimizado (Sin métricas lentas)"
-                    # ----------------------------
 
                     capital_disponible = inversion_sim if "Explorador" in modo else total_inv
                     acciones_posibles = capital_disponible / precio_actual
                     
                     st.success("🟢 Conexión de Alta Velocidad establecida (API Privada Activa).")
-                    st.info(f"🏷️ **Precio actual de {ticker_limpio}:** ${precio_actual:,.2f}\n\n"
-                            f"💼 Con tu capital de **${capital_disponible:,.2f}**, te alcanza para comprar **{acciones_posibles:.4f}** acciones (fracciones).")
+                    st.info(f"🏷️ **Precio actual de {ticker_limpio}:** \${precio_actual:,.2f}\n\n"
+                            f"💼 Con tu capital de **\${capital_disponible:,.2f}**, te alcanza para comprar **{acciones_posibles:.4f}** acciones (fracciones).")
                     
                     if "Explorador" in modo:
                         st.markdown(f"## 📡 Tablero AI.lino: {nombre_empresa}")
@@ -144,14 +141,47 @@ if "Comunidad" not in modo:
                         with g2: st.write("**Radar (Último Mes)**"); st.line_chart(df_m['Close'])
                         st.info("💡 Desbloquea gráficas interactivas, Reportes Ejecutivos y el Asesor de Riesgos en el **Modo Portafolio (Suite Premium)**.")
                     else:
-                        st.markdown(f"## 💎 Suite VIP AI.lino: {nombre_empresa}")
-                        actual_val, precio_promedio = precio_actual * cant, total_inv / cant if cant > 0 else 0
-                        rend = ((actual_val - total_inv) / total_inv) * 100
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Tu Costo Promedio", f"${precio_promedio:,.2f}"); m2.metric("Precio del Mercado", f"${precio_actual:,.2f}")
-                        m3.metric("Rendimiento Real", f"{rend:.2f}%"); m4.metric("Valor Inversión Hoy", f"${actual_val:,.2f}")
-                        st.markdown("---")
+                        actual_val = precio_actual * cant
+                        precio_promedio = total_inv / cant if cant > 0 else 0
+                        rend = ((actual_val - total_inv) / total_inv) * 100 if total_inv > 0 else 0
+                        ganancia_perdida = actual_val - total_inv
                         
+                        # ==========================================
+                        # CEREBRO INTERACTIVO DE PÉRDIDAS/GANANCIAS
+                        # ==========================================
+                        if rend < 0:
+                            rebote_esperado = precio_actual * 1.03 
+                            if precio_promedio > rebote_esperado:
+                                acciones_a_comprar = cant * ((precio_promedio - rebote_esperado) / (rebote_esperado - precio_actual))
+                                capital_necesario = acciones_a_comprar * precio_actual
+                                
+                                st.error(f"📉 **Ups, vas en pérdida de \${abs(ganancia_perdida):,.2f}**\n\n"
+                                           f"💡 **Estrategia de Rescate:** Para salir 'tablas' aprovechando un mínimo rebote del 3% (si el precio sube a **\${rebote_esperado:,.2f}**), "
+                                           f"necesitarías promediar invirtiendo aprox. **\${capital_necesario:,.2f}** extra a este precio actual.\n\n"
+                                           f"⚠️ **OJO:** No promedies a ciegas. Ten en cuenta que el activo puede seguir cayendo hasta su piso mensual de **\${piso_m:,.2f}**.")
+                            else:
+                                st.error(f"📉 **Ups, vas en pérdida de \${abs(ganancia_perdida):,.2f}**\n\n"
+                                           f"💡 **Tranquilidad:** Estás a menos de un 3% de recuperar tu costo. Un levísimo rebote te saca a ganancias. "
+                                           f"Mantén la calma, pero pon una alerta por si se acerca al piso mensual de **\${piso_m:,.2f}**.")
+                        
+                        elif rend > 0:
+                            st.success(f"🎉 **¡Felicidades! Llevas una ganancia viva de \${ganancia_perdida:,.2f}**\n\n"
+                                       f"💡 **Consejo de Lobo:** Si el precio sigue empujando y toca su techo anual de **\${techo_y:,.2f}** o marca un nuevo máximo, "
+                                       f"considera tomar un poco de ganancia (vender una fracción). Nadie quiebra por asegurar ganancias, ¡ese dinero ya es tuyo!")
+                        else:
+                            st.warning("⚖️ **Estás exactamente 'tablas' (sin pérdidas ni ganancias).**\n\n"
+                                    "El mercado está consolidando. Espera a que defina dirección hacia el techo o el piso antes de tomar acción.")
+                        # ==========================================
+                        
+                        st.markdown(f"## 💎 Suite VIP AI.lino: {nombre_empresa}")
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Tu Costo Promedio", f"${precio_promedio:,.2f}")
+                        m2.metric("Precio del Mercado", f"${precio_actual:,.2f}")
+                        m3.metric("Rendimiento Real", f"{rend:.2f}%")
+                        m4.metric("Valor Inversión Hoy", f"${actual_val:,.2f}")
+                        
+                        st.markdown("---")
+
                         col_izq, col_der = st.columns([2, 1])
                         with col_izq:
                             st.markdown("### 📈 Gráfica Profesional (TradingView)")
@@ -174,9 +204,9 @@ if "Comunidad" not in modo:
                             st.markdown("### 🚨 Matriz de Salida"); st.markdown("<div class='risk-box'>", unsafe_allow_html=True)
                             if "ETF" in categoria: st.write("🏛️ **DCA:** Sigue promediando a la baja mes a mes.")
                             else:
-                                if rend >= 15: st.write("✅ **Victoria:** Mueve tu Stop Loss a tu costo ($" + f"{precio_promedio:.2f}" + ").")
-                                elif rend > 0 and rend < 15: st.write("⚠️ **Alarma:** Pon alarma si baja a tu costo ($" + f"{precio_promedio:.2f}" + "). Asegura tu capital.")
-                                elif rend < 0 and rend > -8: st.write("📉 **Caída Normal:** Mantén si fundamentales siguen igual. Rompiendo $" + f"{piso_m:.2f}" + ", evalúa.")
+                                if rend >= 15: st.write("✅ **Victoria:** Mueve tu Stop Loss a tu costo (\$" + f"{precio_promedio:.2f}" + ").")
+                                elif rend > 0 and rend < 15: st.write("⚠️ **Alarma:** Pon alarma si baja a tu costo (\$" + f"{precio_promedio:.2f}" + "). Asegura tu capital.")
+                                elif rend < 0 and rend > -8: st.write("📉 **Caída Normal:** Mantén si fundamentales siguen igual. Rompiendo \$" + f"{piso_m:.2f}" + ", evalúa.")
                                 else: st.write("🩸 **Salida Urgente:** Caída mayor al 8%. Corta la pérdida y reubica capital.")
                             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -187,16 +217,16 @@ if "Comunidad" not in modo:
                     riesgo_caida = ((precio_pensado - piso_m) / precio_pensado) * 100 if precio_pensado > piso_m else 0
                     t1, t2, t3 = st.columns(3)
                     if "Cíclica" in categoria:
-                        t1.success(f"🟢 **Compra:** Piso mensual: **${piso_m:,.2f}**. Riesgo: **{riesgo_caida:.1f}%**."); t2.info(f"🔵 **Venta:** Techo anual de **${techo_y:,.2f}**. Ganancia: **+{potencial_subida:.1f}%**.")
+                        t1.success(f"🟢 **Compra:** Piso mensual: **\${piso_m:,.2f}**. Riesgo: **{riesgo_caida:.1f}%**."); t2.info(f"🔵 **Venta:** Techo anual de **\${techo_y:,.2f}**. Ganancia: **+{potencial_subida:.1f}%**.")
                         t3.error(f"🔴 **Regla:** Promedia a la baja solo si fundamentales siguen sólidos.")
                     elif "Startup" in categoria:
-                        t1.success(f"🟢 **Oportunidad:** Piso: **${piso_m:,.2f}**. Soporta volatilidad extrema."); t2.info(f"🔵 **Visión:** Techo reciente: **${techo_y:,.2f}**. Busca ganancia **+{potencial_subida:.1f}%**.")
+                        t1.success(f"🟢 **Oportunidad:** Piso: **\${piso_m:,.2f}**. Soporta volatilidad extrema."); t2.info(f"🔵 **Visión:** Techo reciente: **\${techo_y:,.2f}**. Busca ganancia **+{potencial_subida:.1f}%**.")
                         t3.error(f"🔴 **Riesgo:** Vende la posición únicamente si la empresa pierde ventaja competitiva.")
                     elif "Defensiva" in categoria:
-                        t1.success(f"🟢 **Acumulación:** Piso: **${piso_m:,.2f}**. Ofrece estabilidad."); t2.info(f"🔵 **Objetivo:** Techo: **${techo_y:,.2f}** (+**{potencial_subida:.1f}%**). Cobra dividendos.")
+                        t1.success(f"🟢 **Acumulación:** Piso: **\${piso_m:,.2f}**. Ofrece estabilidad."); t2.info(f"🔵 **Objetivo:** Techo: **\${techo_y:,.2f}** (+**{potencial_subida:.1f}%**). Cobra dividendos.")
                         t3.error(f"🔴 **Bajo:** Mantén la calma durante ajustes generales.")
                     else: 
-                        t1.success(f"🟢 **DCA:** Aplicar estrategia DCA es la mejor opción."); t2.info(f"🔵 **Compuesto:** Techo histórico: **${techo_y:,.2f}** (+**{potencial_subida:.1f}%**).")
+                        t1.success(f"🟢 **DCA:** Aplicar estrategia DCA es la mejor opción."); t2.info(f"🔵 **Compuesto:** Techo histórico: **\${techo_y:,.2f}** (+**{potencial_subida:.1f}%**).")
                         t3.error(f"🔴 **Aviso:** Históricamente, los índices bursátiles siempre se recuperan.")
 
                     if "Explorador" not in modo:
@@ -230,11 +260,11 @@ else:
     with col_comm1:
         st.markdown("### 📝 Publica tu Estrategia")
         with st.form("crear_estrategia", clear_on_submit=True):
-            autor_form = st.text_input("Tu Nombre o Nickname:", placeholder="ej. Lobo de wall street")
+            autor_form = st.text_input("Tu Nombre o Nickname:", placeholder="ej. Lobo de Wall Street")
             activo_form = st.text_input("Activo / Símbolo:", placeholder="ej. BTC-USD, GMEXICO, S&P 500").upper()
             categoria_form = st.selectbox("Categoría:", 
                                          ["🔄 Cíclica", "🚀 Startup / Cripto", "🛡️ Defensiva", "🏛️ ETF / Índice"])
-            estrategia_form = st.text_area("Tu Estrategia Detallada:", placeholder="ej. Comprar si rompe la resistencia de los $X, buscando el techo en $Y. Stop Loss en $Z.")
+            estrategia_form = st.text_area("Tu Estrategia Detallada:", placeholder="ej. Comprar si rompe la resistencia de los \$X, buscando el techo en \$Y. Stop Loss en \$Z.")
             
             submit_form = st.form_submit_button("📢 Publicar en Comunidad")
             
