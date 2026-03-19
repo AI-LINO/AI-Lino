@@ -66,8 +66,20 @@ if "Comunidad" not in modo:
     col1, col2 = st.columns([1, 2])
     with col1:
         ticker_input = st.text_input("Símbolo (ej. TSLA, GMEXICO, SOL):", "TSLA").upper().strip()
-        dicc = { "S&P 500": "VOO", "SP500": "VOO", "IPC": "^MXX", "BMV": "^MXX", "NASDAQ": "QQQ", "BTC": "BTC-USD", "BITCOIN": "BTC-USD", "PEÑOLES": "PE&OLES.MX", "PE&OLES": "PE&OLES.MX", "GMEXICO": "GMEXICOB.MX", "GRUPO MEXICO": "GMEXICOB.MX" }
-        ticker_limpio = dicc.get(ticker_input, ticker_input.replace(" ", ""))
+        dicc = { "S&P 500": "VOO", "SP500": "VOO", "IPC": "^MXX", "BMV": "^MXX", "NASDAQ": "QQQ", 
+                 "BTC": "BTC-USD", "BITCOIN": "BTC-USD", "ETH": "ETH-USD", "ETHEREUM": "ETH-USD",
+                 "SOL": "SOL-USD", "SOLANA": "SOL-USD", "XRP": "XRP-USD", "DOGE": "DOGE-USD",
+                 "PEÑOLES": "PE&OLES.MX", "PE&OLES": "PE&OLES.MX", "GMEXICO": "GMEXICOB.MX", "GRUPO MEXICO": "GMEXICOB.MX" }
+        
+        # --- SÚPER TRADUCTOR MEXICANO ---
+        if ticker_input in dicc:
+            ticker_limpio = dicc[ticker_input]
+        else:
+            ticker_limpio = ticker_input.replace(" ", "")
+            # Si trae diagonal (ej. GRUMA/B, BIMBO/A), lo juntamos y le ponemos .MX para Yahoo
+            if "/" in ticker_limpio:
+                ticker_limpio = ticker_limpio.replace("/", "") + ".MX"
+        # --------------------------------
 
     with col2:
         categoria = st.selectbox("Categoría de Activo (Estilo Peter Lynch):", 
@@ -84,6 +96,10 @@ if "Comunidad" not in modo:
     if st.button("📊 Ejecutar Motor AI.lino"):
         with st.spinner("Procesando datos del mercado en servidores seguros..."):
             try:
+                # 0. SÚPER DETECTOR DE CRIPTOS
+                if "Cripto" in categoria and "-" not in ticker_limpio and not ticker_limpio.endswith(".MX") and "^" not in ticker_limpio:
+                    ticker_limpio = f"{ticker_limpio}-USD"
+
                 stock = yf.Ticker(ticker_limpio)
                 df_y = stock.history(period="1y")
                 
@@ -186,9 +202,12 @@ if "Comunidad" not in modo:
                         with col_izq:
                             st.markdown("### 📈 Gráfica Profesional (TradingView)")
                             tv_symbol = ticker_limpio.replace(".MX", "") if ".MX" in ticker_limpio else ticker_limpio
-                            if "BTC" in tv_symbol: tv_symbol = "BINANCE:BTCUSD"
-                            elif "ETH" in tv_symbol: tv_symbol = "BINANCE:ETHUSD"
-                            elif "-USD" in tv_symbol: tv_symbol = f"BINANCE:{tv_symbol.replace('-USD', 'USD')}"
+                            
+                            # Corrección para Criptos en TradingView (Binance usa USDT)
+                            if "BTC" in tv_symbol: tv_symbol = "BINANCE:BTCUSDT"
+                            elif "ETH" in tv_symbol: tv_symbol = "BINANCE:ETHUSDT"
+                            elif "-USD" in tv_symbol: tv_symbol = f"BINANCE:{tv_symbol.replace('-USD', 'USDT')}"
+                            
                             tv_widget = f"""<div class="tradingview-widget-container"><div id="tradingview_lino"></div><script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script><script type="text/javascript">new TradingView.widget({{ "width": "100%", "height": 400, "symbol": "{tv_symbol}", "interval": "D", "timezone": "Etc/UTC", "theme": "light", "style": "1", "locale": "es", "enable_publishing": false, "hide_top_toolbar": false, "save_image": false, "container_id": "tradingview_lino" }});</script></div>"""
                             components.html(tv_widget, height=410)
                         with col_der:
