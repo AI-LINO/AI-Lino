@@ -162,32 +162,44 @@ if "Comunidad" not in modo:
                         rend = ((actual_val - total_inv) / total_inv) * 100 if total_inv > 0 else 0
                         ganancia_perdida = actual_val - total_inv
                         
-                        # ==========================================
-                        # CEREBRO INTERACTIVO DE PÉRDIDAS/GANANCIAS
-                        # ==========================================
+                        # ---------------------------------------------------------
+                        # BLOQUE DE ANÁLISIS DE RENDIMIENTO (ORDEN CORRECTO)
+                        # ---------------------------------------------------------
                         if rend < 0:
                             rebote_esperado = precio_actual * 1.03 
-                            if precio_promedio > rebote_esperado:
-                                acciones_a_comprar = cant * ((precio_promedio - rebote_esperado) / (rebote_esperado - precio_actual))
-                                capital_necesario = acciones_a_comprar * precio_actual
-                                
-                                st.error(f"📉 **Ups, vas en pérdida de \${abs(ganancia_perdida):,.2f}**\n\n"
-                                           f"💡 **Estrategia de Rescate:** Para salir 'tablas' aprovechando un mínimo rebote del 3% (si el precio sube a **\${rebote_esperado:,.2f}**), "
-                                           f"necesitarías promediar invirtiendo aprox. **\${capital_necesario:,.2f}** extra a este precio actual.\n\n"
-                                           f"⚠️ **OJO:** No promedies a ciegas. Ten en cuenta que el activo puede seguir cayendo hasta su piso mensual de **\${piso_m:,.2f}**.")
-                            else:
-                                st.error(f"📉 **Ups, vas en pérdida de \${abs(ganancia_perdida):,.2f}**\n\n"
-                                           f"💡 **Tranquilidad:** Estás a menos de un 3% de recuperar tu costo. Un levísimo rebote te saca a ganancias. "
-                                           f"Mantén la calma, pero pon una alerta por si se acerca al piso mensual de **\${piso_m:,.2f}**.")
-                        
+                            
+                            # Cálculos de rescate
+                            inv_n1 = total_inv * 0.25
+                            cant_n1 = inv_n1 / precio_actual
+                            nuevo_promedio_n1 = (total_inv + inv_n1) / (cant + cant_n1)
+                            resultado_n1 = ((cant + cant_n1) * rebote_esperado) - (total_inv + inv_n1)
+                            
+                            inv_n2 = total_inv * 0.50
+                            cant_n2 = inv_n2 / precio_actual
+                            nuevo_promedio_n2 = (total_inv + inv_n2) / (cant + cant_n2)
+                            resultado_n2 = ((cant + cant_n2) * rebote_esperado) - (total_inv + inv_n2)
+
+                            st.error(f"📉 **Ups, vas en pérdida de \${abs(ganancia_perdida):,.2f}**")
+                            
+                            st.markdown(f"""
+                            <div class="info-box">
+                                <b>💡 Estrategia de Rescate Proporcional:</b> Si el precio rebota un 3% (a <b>\${rebote_esperado:,.2f}</b>):
+                                <br><br>
+                                🟢 <b>Nivel 1 (25%):</b> Invierte \${inv_n1:,.2f}. Promedio: \${nuevo_promedio_n1:,.2f}. Resultado: \${resultado_n1:,.2f} (Recuperado).
+                                <br>
+                                🟡 <b>Nivel 2 (50%):</b> Invierte \${inv_n2:,.2f}. Promedio: \${nuevo_promedio_n2:,.2f}. Resultado: \${resultado_n2:,.2f} Ganancia.
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.warning(f"⚠️ **OJO:** Soporte en **\${piso_m:,.2f}**. Considera **Stop Loss** si rompe con fuerza.")
+
                         elif rend > 0:
-                            st.success(f"🎉 **¡Felicidades! Llevas una ganancia viva de \${ganancia_perdida:,.2f}**\n\n"
-                                       f"💡 **Consejo de Lobo:** Si el precio sigue empujando y toca su techo anual de **\${techo_y:,.2f}** o marca un nuevo máximo, "
-                                       f"considera tomar un poco de ganancia (vender una fracción). Nadie quiebra por asegurar ganancias, ¡ese dinero ya es tuyo!")
+                            st.success(f"🎉 **¡Felicidades! Llevas una ganancia de \${ganancia_perdida:,.2f}**")
+                            st.info(f"💡 **Consejo de Lobo:** Cerca de los **\${techo_y:,.2f}**, considera tomar ganancias.")
+                        
                         else:
-                            st.warning("⚖️ **Estás exactamente 'tablas' (sin pérdidas ni ganancias).**\n\n"
-                                    "El mercado está consolidando. Espera a que defina dirección hacia el techo o el piso antes de tomar acción.")
-                        # ==========================================
+                            st.warning("⚖️ **Estás exactamente 'tablas' (sin pérdidas ni ganancias).**")
+                        # ---------------------------------------------------------
                         
                         st.markdown(f"## 💎 Suite VIP AI.lino: {nombre_empresa}")
                         m1, m2, m3, m4 = st.columns(4)
