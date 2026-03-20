@@ -139,7 +139,15 @@ if "Comunidad" not in modo:
                     except:
                         precio_actual = df_y['Close'].iloc[-1]
                         nombre_empresa = ticker_limpio
-                        descripcion = "Información corporativa cargada vía terminal segura."
+                        # --- BLOQUE 1: IDENTIFICADOR LYNCH ---
+                        sectores_ciclicos = ['Basic Materials', 'Auto Manufacturers', 'Semiconductors', 'Mining', 'Steel']
+                        try:
+                            sector_accion = stock.info.get('sector', 'N/A')
+                        except:
+                            sector_accion = "N/A"
+                        
+                        # Detecta si es cíclica por sector o por elección del usuario
+                        es_ciclica_auto = any(s in sector_accion for s in sectores_ciclicos) or "Cíclica" in categoria
                     
                     pe_ratio = "Optimizado (Sin métricas lentas)"
 
@@ -189,8 +197,7 @@ if "Comunidad" not in modo:
                                 <br>
                                 🟡 <b>Nivel 2 (50%):</b> Invierte \${inv_n2:,.2f}. Promedio: \${nuevo_promedio_n2:,.2f}. Resultado: \${resultado_n2:,.2f} Ganancia.
                             </div>
-                            """, unsafe_allow_html=True)
-                            
+                            """, unsafe_allow_html=True)                            
                             st.warning(f"⚠️ **OJO:** Soporte en **\${piso_m:,.2f}**. Considera **Stop Loss** si rompe con fuerza.")
 
                         elif rend > 0:
@@ -232,14 +239,42 @@ if "Comunidad" not in modo:
                             elif rsi_actual < 30: st.success(f"**RSI (14D):** {rsi_actual:.1f} (Sobrevendida)")
                             elif rsi_actual > 70: st.error(f"**RSI (14D):** {rsi_actual:.1f} (Sobrecomprada)")
                             else: st.info(f"**RSI (14D):** {rsi_actual:.1f} (Neutral)")
-                            st.markdown("### 🚨 Matriz de Salida"); st.markdown("<div class='risk-box'>", unsafe_allow_html=True)
-                            if "ETF" in categoria: st.write("🏛️ **DCA:** Sigue promediando a la baja mes a mes.")
-                            else:
-                                if rend >= 15: st.write("✅ **Victoria:** Mueve tu Stop Loss a tu costo (\$" + f"{precio_promedio:.2f}" + ").")
-                                elif rend > 0 and rend < 15: st.write("⚠️ **Alarma:** Pon alarma si baja a tu costo (\$" + f"{precio_promedio:.2f}" + "). Asegura tu capital.")
-                                elif rend < 0 and rend > -8: st.write("📉 **Caída Normal:** Mantén si fundamentales siguen igual. Rompiendo \$" + f"{piso_m:.2f}" + ", evalúa.")
-                                else: st.write("🩸 **Salida Urgente:** Caída mayor al 8%. Corta la pérdida y reubica capital.")
-                            st.markdown("</div>", unsafe_allow_html=True)
+# --- DEFINICIÓN DE EMERGENCIA ---
+                        sectores_ciclicos = ['Basic Materials', 'Auto Manufacturers', 'Semiconductors', 'Mining', 'Steel']
+                        try:
+                            sector_accion = stock.info.get('sector', 'N/A')
+                        except:
+                            sector_accion = "N/A"
+                        
+                        es_ciclica_auto = any(s in sector_accion for s in sectores_ciclicos) or "Cíclica" in categoria
+                        # -------------------------------
+
+                        # --- MATRIZ DE SALIDA INTELIGENTE ---
+                        st.markdown(f"### 🚨 Matriz de Salida")
+                        
+                        # Definimos el color del borde y fondo según el RSI
+                        if rsi_actual < 30:
+                            color_box = "#d4edda" # Verde claro
+                            mensaje = f"🟢 **OPORTUNIDAD:** RSI en {rsi_actual:.1f}. El activo está muy castigado. "
+                            mensaje += "Si es cíclica, Peter Lynch sugiere que este es el momento de acumular."
+                        elif rsi_actual > 70:
+                            color_box = "#f8d7da" # Rojo claro
+                            mensaje = f"🔴 **PELIGRO:** RSI en {rsi_actual:.1f}. Sobrecompra extrema. "
+                            mensaje += "Considera vender una fracción para asegurar ganancias antes de la corrección."
+                        else:
+                            color_box = "#e2e3e5" # Gris/Azul Neutro
+                            # Aquí calculamos niveles dinámicos para el recuadro que estaba vacío
+                            precio_stop = precio_actual * 0.92 # -8% Stop Loss
+                            precio_take = precio_actual * 1.15 # +15% Meta
+                            mensaje = f"🔵 **ESTRATEGIA NEUTRAL:** RSI en {rsi_actual:.1f}. El precio está consolidando.<br>"
+                            mensaje += f"• 🛡️ **Stop Loss sugerido:** ${precio_stop:,.2f} (-8%)<br>"
+                            mensaje += f"• 🎯 **Objetivo de salida:** ${precio_take:,.2f} (+15%)"
+
+                        st.markdown(f"""
+                        <div style="background-color: {color_box}; padding: 15px; border-radius: 10px; border: 2px solid #2c3e50; color: #1a1a1a;">
+                            {mensaje}
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     st.markdown("---")
                     st.markdown("### 🎯 Sala de Simulación AI.lino")
