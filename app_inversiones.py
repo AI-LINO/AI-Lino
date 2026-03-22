@@ -1,18 +1,3 @@
-Conversación abierta. 1 mensaje leído.
-
-Ir al contenido
-Cómo usar Gmail con lectores de pantalla
-in:sent 
-1 de 147
-Proyecto antropic
-
-Hugo Hernandez <hugo.lino1093@gmail.com>
-Archivos adjuntos
-7:01 p.m. (hace 11 minutos)
-para Hugo
-
- Un archivo adjunto
-  •  Analizado por Gmail
 import streamlit as st
 import yfinance as yf
 import pandas as pd
