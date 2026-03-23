@@ -730,5 +730,3 @@ else:
                 {estr['estrategia']}
             </div>
             """, unsafe_allow_html=True)
-ailino_app.py
-Mostrando ailino_app.py
