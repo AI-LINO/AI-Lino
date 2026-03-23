@@ -80,6 +80,7 @@ div[data-testid="stMetricValue"] {
     border-radius: 8px;
     padding: 16px;
     margin: 8px 0;
+    line-height: 1.8;
 }
 
 .stButton>button {
@@ -189,18 +190,10 @@ def calcular_bb(serie, periodo=20):
     return upper, media, lower
 
 def analizar_semaforo(df, precio_actual, info, categoria):
-    """
-    Semáforo de 4 colores:
-    🔴 NO COMPRAR   — múltiples señales negativas
-    🟡 PUEDE SEGUIR CAYENDO — señales mixtas con sesgo bajista
-    🔵 NEUTRAL      — señales mixtas sin dirección clara
-    🟢 INYECTAR CAPITAL — señales técnicas y fundamentales positivas
-    """
     puntos = 0
     razones = []
     alertas = []
 
-    # ── RSI ──
     rsi_serie = calcular_rsi(df['Close'])
     rsi = rsi_serie.iloc[-1]
 
@@ -219,7 +212,6 @@ def analizar_semaforo(df, precio_actual, info, categoria):
     else:
         razones.append(f"🔵 RSI en {rsi:.1f} — Zona neutral")
 
-    # ── MACD ──
     macd, señal_macd = calcular_macd(df['Close'])
     if macd.iloc[-1] > señal_macd.iloc[-1] and macd.iloc[-2] <= señal_macd.iloc[-2]:
         puntos += 2
@@ -234,7 +226,6 @@ def analizar_semaforo(df, precio_actual, info, categoria):
         puntos -= 1
         alertas.append("⚠️ MACD por debajo de señal — presión vendedora")
 
-    # ── MEDIAS MÓVILES ──
     ma50 = df['Close'].rolling(50).mean().iloc[-1]
     ma200 = df['Close'].rolling(200).mean().iloc[-1] if len(df) >= 200 else None
 
@@ -253,7 +244,6 @@ def analizar_semaforo(df, precio_actual, info, categoria):
             puntos -= 1
             alertas.append(f"⚠️ Precio bajo MA200 (${ma200:.2f}) — tendencia larga bajista")
 
-    # ── POSICIÓN EN RANGO ANUAL ──
     techo = df['High'].max()
     piso = df['Low'].min()
     rango = techo - piso
@@ -268,7 +258,6 @@ def analizar_semaforo(df, precio_actual, info, categoria):
     else:
         razones.append(f"🔵 Precio en zona media del rango ({posicion_pct:.0f}%)")
 
-    # ── BOLLINGER BANDS ──
     bb_up, bb_mid, bb_low = calcular_bb(df['Close'])
     if precio_actual < bb_low.iloc[-1]:
         puntos += 2
@@ -277,13 +266,11 @@ def analizar_semaforo(df, precio_actual, info, categoria):
         puntos -= 2
         alertas.append(f"🔴 Precio sobre Banda Bollinger superior — sobreextendido")
 
-    # ── FUNDAMENTALES (solo acciones, no cripto) ──
     es_cripto = any(c in categoria for c in ["Cripto", "Startup"])
     pe_ratio = None
     if not es_cripto and info:
         try:
             pe_ratio = info.get('trailingPE', None)
-            forward_pe = info.get('forwardPE', None)
             profit_margins = info.get('profitMargins', None)
             revenue_growth = info.get('revenueGrowth', None)
             debt_equity = info.get('debtToEquity', None)
@@ -315,11 +302,9 @@ def analizar_semaforo(df, precio_actual, info, categoria):
             if debt_equity and debt_equity > 200:
                 puntos -= 1
                 alertas.append(f"⚠️ Deuda/Capital elevada ({debt_equity:.0f}) — riesgo financiero")
-
         except:
             pass
 
-    # ── VOLUMEN ──
     vol_avg = df['Volume'].rolling(20).mean().iloc[-1]
     vol_hoy = df['Volume'].iloc[-1]
     if vol_hoy > vol_avg * 1.5 and df['Close'].iloc[-1] > df['Close'].iloc[-2]:
@@ -329,26 +314,17 @@ def analizar_semaforo(df, precio_actual, info, categoria):
         puntos -= 1
         alertas.append("⚠️ Volumen alto con precio cayendo — vendedores activos")
 
-    # ── DECISIÓN FINAL ──
     if puntos >= 6:
-        color = "verde"
-        emoji = "🟢"
-        decision = "INYECTAR CAPITAL"
+        color = "verde"; emoji = "🟢"; decision = "INYECTAR CAPITAL"
         descripcion = "Múltiples señales técnicas y fundamentales positivas alineadas. Es momento de considerar una entrada."
     elif puntos >= 2:
-        color = "azul"
-        emoji = "🔵"
-        decision = "NEUTRAL — ESPERAR"
+        color = "azul"; emoji = "🔵"; decision = "NEUTRAL — ESPERAR"
         descripcion = "Señales mixtas sin dirección clara. Observa más antes de comprometer capital."
     elif puntos >= -2:
-        color = "amarillo"
-        emoji = "🟡"
-        decision = "PUEDE SEGUIR CAYENDO"
+        color = "amarillo"; emoji = "🟡"; decision = "PUEDE SEGUIR CAYENDO"
         descripcion = "Señales con sesgo bajista. El precio podría continuar corrigiendo. Paciencia."
     else:
-        color = "rojo"
-        emoji = "🔴"
-        decision = "NO COMPRAR AHORA"
+        color = "rojo"; emoji = "🔴"; decision = "NO COMPRAR AHORA"
         descripcion = "Múltiples señales negativas. Esperar confirmación de piso antes de entrar."
 
     return {
@@ -362,7 +338,6 @@ def analizar_semaforo(df, precio_actual, info, categoria):
     }
 
 def calcular_rescate(cant_actual, inv_total_orig, precio_mercado, cat_sel, techo_y, piso_m):
-    """Motor de rescate específico con 3 niveles y análisis de soporte."""
     if cant_actual <= 0 or inv_total_orig <= 0:
         return None
 
@@ -373,11 +348,9 @@ def calcular_rescate(cant_actual, inv_total_orig, precio_mercado, cat_sel, techo
     narrativa = narrativas[cat_sel]
     meta_pct = narrativa["meta_pct"]
 
-    # ── Soporte real del mercado ──
     distancia_piso = ((precio_mercado - piso_m) / precio_mercado) * 100
-    stop_loss_sugerido = piso_m * 0.97  # 3% bajo el piso
+    stop_loss_sugerido = piso_m * 0.97
 
-    # ── 3 niveles de rescate ──
     niveles = []
     porcentajes = [0.25, 0.50, 1.00]
     nombres = ["Nivel 1 — Conservador (25%)", "Nivel 2 — Moderado (50%)", "Nivel 3 — Agresivo (100%)"]
@@ -459,11 +432,9 @@ if "Comunidad" not in modo:
     with col1:
         ticker_input = st.text_input("Símbolo (ej. TSLA, GMEXICO, BTC, SOL):", "TSLA")
         ticker_limpio = limpiar_ticker(ticker_input)
-
     with col2:
         categoria = st.selectbox("Categoría de Activo (Estilo Peter Lynch):", list(narrativas.keys()))
 
-    # Inputs según modo
     if "Explorador" in modo:
         inversion_sim = st.number_input("💰 Capital que deseas simular (USD/MXN):", min_value=100.0, value=10000.0)
         cant = 0.0
@@ -489,23 +460,34 @@ if "Comunidad" not in modo:
                     st.error(f"❌ No se encontraron datos para '{ticker_input}'. Verifica el símbolo.")
                     st.stop()
 
-                # Datos base
+                # ── Datos base ───────────────────────────────
                 precio_actual = df_1y['Close'].iloc[-1]
-                techo_y = df_1y['High'].max()
-                piso_m = df_1y.tail(22)['Low'].min()
-                piso_anual = df_1y['Low'].min()
+                techo_y       = df_1y['High'].max()
+                piso_anual    = df_1y['Low'].min()
 
-                # Info fundamental
+                # ── PISO MENSUAL: Low del mes calendario anterior ──
+                hoy = pd.Timestamp.now(tz=df_1y.index.tz)
+                mes_ant  = hoy.month - 1 if hoy.month > 1 else 12
+                anio_ant = hoy.year if hoy.month > 1 else hoy.year - 1
+                hist_mes_ant = df_1y[
+                    (df_1y.index.month == mes_ant) & (df_1y.index.year == anio_ant)
+                ]
+                piso_m = float(hist_mes_ant['Low'].min()) if not hist_mes_ant.empty else float(df_1y.tail(22)['Low'].min())
+
+                # ── EMA Mensual: EMA20 sobre los últimos ~20 días hábiles ──
+                ema_mensual = float(df_1y['Close'].ewm(span=20, adjust=False).mean().iloc[-1])
+
+                # ── Info fundamental ─────────────────────────
                 try:
                     info = stock.info
                     nombre_empresa = info.get('longName', ticker_limpio)
                     sector = info.get('sector', 'N/A')
-                    pais = info.get('country', 'N/A')
+                    pais   = info.get('country', 'N/A')
                 except:
                     info = {}
                     nombre_empresa = ticker_limpio
                     sector = 'N/A'
-                    pais = 'N/A'
+                    pais   = 'N/A'
 
                 st.success(f"🟢 Datos obtenidos en tiempo real · **{nombre_empresa}** · Sector: {sector}")
 
@@ -515,7 +497,6 @@ if "Comunidad" not in modo:
                 analisis = analizar_semaforo(df_1y, precio_actual, info, categoria)
 
                 st.markdown("## 🚦 Semáforo de Decisión AI.lino")
-
                 clase_css = f"semaforo-{analisis['color']}"
                 st.markdown(f"""
                 <div class="{clase_css}">
@@ -528,45 +509,49 @@ if "Comunidad" not in modo:
 
                 st.write("")
 
-                # Razones y alertas
                 col_r, col_a = st.columns(2)
                 with col_r:
                     st.markdown("#### ✅ Señales Positivas")
-                    if analisis['razones']:
-                        for r in analisis['razones']:
-                            st.markdown(f"- {r}")
-                    else:
-                        st.markdown("- Sin señales positivas detectadas")
-
+                    for r in (analisis['razones'] or ["- Sin señales positivas detectadas"]):
+                        st.markdown(f"- {r}")
                 with col_a:
                     st.markdown("#### ⚠️ Alertas y Riesgos")
-                    if analisis['alertas']:
-                        for a in analisis['alertas']:
-                            st.markdown(f"- {a}")
-                    else:
-                        st.markdown("- Sin alertas detectadas")
+                    for a in (analisis['alertas'] or ["- Sin alertas detectadas"]):
+                        st.markdown(f"- {a}")
 
                 st.markdown("---")
 
-                # ─────────────────────────────
-                # PANEL DE INDICADORES
-                # ─────────────────────────────
+                # ─────────────────────────────────────────────
+                # PANEL ANALÍTICO — con Piso Mensual y EMA Mensual
+                # ─────────────────────────────────────────────
                 st.markdown("## 📐 Panel Analítico")
 
                 i1, i2, i3, i4, i5 = st.columns(5)
-                i1.metric("💲 Precio Actual", f"${precio_actual:,.2f}")
-                i2.metric("📊 RSI (14D)", f"{analisis['rsi']:.1f}",
+                i1.metric("💲 Precio Actual",  f"${precio_actual:,.2f}")
+                i2.metric("📊 RSI (14D)",       f"{analisis['rsi']:.1f}",
                           delta="Sobrevendido" if analisis['rsi'] < 35 else ("Sobrecomprado" if analisis['rsi'] > 65 else "Neutral"))
-                i3.metric("📈 MA50", f"${analisis['ma50']:,.2f}",
-                          delta=f"{((precio_actual/analisis['ma50'])-1)*100:.1f}% vs precio")
-                i4.metric("🔺 Techo Anual", f"${techo_y:,.2f}")
-                i5.metric("🔻 Piso Anual", f"${piso_anual:,.2f}")
+                i3.metric("📈 MA50",            f"${analisis['ma50']:,.2f}",
+                          delta=f"{((precio_actual / analisis['ma50']) - 1) * 100:.1f}% vs precio")
+                i4.metric("🔺 Techo Anual",    f"${techo_y:,.2f}")
+                i5.metric("🔻 Piso Anual",     f"${piso_anual:,.2f}")
 
+                # ── FILA 2: Piso Mensual + EMA Mensual + BB ──────── NUEVO
+                p1, p2, p3, p4, p5 = st.columns(5)
+                p1.metric("📅 Piso Mensual",   f"${piso_m:,.2f}",
+                          delta=f"{((precio_actual / piso_m) - 1) * 100:.1f}% vs precio")
+                p2.metric("〰️ EMA Mensual (20D)", f"${ema_mensual:,.2f}",
+                          delta=f"{((precio_actual / ema_mensual) - 1) * 100:.1f}% vs precio")
+                if analisis['ma200'] is not None:
+                    p3.metric("📉 MA200",       f"${analisis['ma200']:,.2f}",
+                              delta=f"{((precio_actual / analisis['ma200']) - 1) * 100:.1f}% vs precio")
+                else:
+                    p3.metric("📉 MA200",       "N/D", delta="Historial insuficiente")
                 if analisis['pe_ratio']:
-                    p1, p2, p3 = st.columns(3)
-                    p1.metric("📋 P/E Ratio", f"{analisis['pe_ratio']:.1f}")
-                    p2.metric("📊 BB Superior", f"${analisis['bb_up']:,.2f}")
-                    p3.metric("📊 BB Inferior", f"${analisis['bb_low']:,.2f}")
+                    p4.metric("📋 P/E Ratio",   f"{analisis['pe_ratio']:.1f}")
+                    p5.metric("📊 BB Superior",  f"${analisis['bb_up']:,.2f}")
+                else:
+                    p4.metric("📊 BB Superior",  f"${analisis['bb_up']:,.2f}")
+                    p5.metric("📊 BB Inferior",  f"${analisis['bb_low']:,.2f}")
 
                 st.markdown("---")
 
@@ -576,36 +561,48 @@ if "Comunidad" not in modo:
                 if "Explorador" in modo:
                     st.markdown(f"## 🔍 Tablero AI.lino: {nombre_empresa}")
                     acciones_posibles = inversion_sim / precio_actual
-                    st.info(f"💼 Con **${inversion_sim:,.2f}** puedes comprar **{acciones_posibles:.4f}** títulos al precio actual de **${precio_actual:,.2f}**")
-
-                    # Gráfica histórica
+                    st.info(
+                        f"💼 Con **${inversion_sim:,.2f}** puedes comprar "
+                        f"**{acciones_posibles:.4f}** títulos al precio actual de **${precio_actual:,.2f}**"
+                    )
                     st.markdown("#### 📈 Histórico 1 Año")
                     st.line_chart(df_1y['Close'])
-
-                    # Radar último mes
                     if not df_1m.empty:
                         st.markdown("#### 📡 Radar Último Mes (1H)")
                         st.line_chart(df_1m['Close'])
 
                 # ─────────────────────────────
-                # MODO PORTAFOLIO
+                # MODO PORTAFOLIO — Suite VIP
                 # ─────────────────────────────
                 else:
-                    precio_promedio = total_inv / cant if cant > 0 else 0
-                    valor_actual = precio_actual * cant
+                    precio_promedio  = total_inv / cant if cant > 0 else 0
+                    valor_actual     = precio_actual * cant
                     ganancia_perdida = valor_actual - total_inv
-                    rendimiento = (ganancia_perdida / total_inv * 100) if total_inv > 0 else 0
+                    rendimiento      = (ganancia_perdida / total_inv * 100) if total_inv > 0 else 0
 
                     st.markdown(f"## 💎 Suite VIP AI.lino: {nombre_empresa}")
 
+                    # ── Fila principal de portafolio ──────────────────
                     m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("Tu Promedio", f"${precio_promedio:,.2f}")
+                    m1.metric("Tu Promedio",    f"${precio_promedio:,.2f}")
                     m2.metric("Precio Mercado", f"${precio_actual:,.2f}",
-                              delta=f"{((precio_actual/precio_promedio)-1)*100:.1f}%" if precio_promedio > 0 else None)
-                    m3.metric("Rendimiento", f"{rendimiento:.2f}%")
-                    m4.metric("Valor Hoy", f"${valor_actual:,.2f}")
+                              delta=f"{((precio_actual / precio_promedio) - 1) * 100:.1f}%" if precio_promedio > 0 else None)
+                    m3.metric("Rendimiento",    f"{rendimiento:.2f}%")
+                    m4.metric("Valor Hoy",      f"${valor_actual:,.2f}")
 
-                    # ── TradingView ──
+                    # ── NUEVA FILA: Piso Mensual + EMA Mensual ──────── NUEVO
+                    v1, v2, v3 = st.columns(3)
+                    v1.metric("📅 Piso Mensual",      f"${piso_m:,.2f}",
+                              delta=f"{((precio_actual / piso_m) - 1) * 100:.1f}% vs precio actual")
+                    v2.metric("〰️ EMA Mensual (20D)", f"${ema_mensual:,.2f}",
+                              delta=f"{((precio_actual / ema_mensual) - 1) * 100:.1f}% vs precio actual")
+                    if analisis['ma200'] is not None:
+                        v3.metric("📉 MA200 (Anual)",  f"${analisis['ma200']:,.2f}",
+                                  delta=f"{((precio_actual / analisis['ma200']) - 1) * 100:.1f}% vs precio actual")
+                    else:
+                        v3.metric("📉 MA200 (Anual)",  "N/D")
+
+                    # ── TradingView ──────────────────────────────────
                     tv_symbol = ticker_limpio.replace(".MX", "").replace("-", "")
                     tv_widget = f"""
                     <div class="tradingview-widget-container">
@@ -628,7 +625,7 @@ if "Comunidad" not in modo:
 
                     st.markdown("---")
 
-                    # ── MOTOR DE RESCATE ──
+                    # ── MOTOR DE RESCATE ─────────────────────────────
                     if rendimiento < 0:
                         rescate = calcular_rescate(cant, total_inv, precio_actual, categoria, techo_y, piso_m)
 
@@ -636,7 +633,6 @@ if "Comunidad" not in modo:
                             st.markdown("## 🛡️ Motor de Rescate AI.lino")
                             st.error(f"📉 Pérdida actual: **${abs(rescate['perdida_actual']):,.2f}** ({rescate['pct_perdida']:.1f}%)")
 
-                            # Contexto Lynch
                             st.markdown(f"""
                             <div class="card">
                                 <b>Filosofía: {rescate['narrativa']['estilo']}</b><br>
@@ -644,30 +640,37 @@ if "Comunidad" not in modo:
                             </div>
                             """, unsafe_allow_html=True)
 
-                            # Soporte y Stop Loss
                             col_s1, col_s2 = st.columns(2)
                             with col_s1:
                                 dist_color = "🟢" if rescate['distancia_piso'] > 5 else "🔴"
-                                st.info(f"{dist_color} **Piso mensual:** ${piso_m:,.2f} · Distancia: {rescate['distancia_piso']:.1f}% abajo")
+                                st.info(
+                                    f"{dist_color} **Piso mensual:** ${rescate['piso_m']:,.2f} · "
+                                    f"Distancia: {rescate['distancia_piso']:.1f}% abajo"
+                                )
                             with col_s2:
-                                st.warning(f"🛑 **Stop Loss sugerido:** ${rescate['stop_loss']:,.2f} (3% bajo el piso)")
+                                st.warning(
+                                    f"🛑 **Stop Loss sugerido:** ${rescate['stop_loss']:,.2f} "
+                                    f"(3% bajo el piso mensual)"
+                                )
 
-                            # Sala de Simulación
                             st.markdown("### 🎯 Sala de Simulación — 3 Niveles de Rescate")
-                            st.caption(f"Objetivo de salida: **{rescate['narrativa']['nombre_meta']}** ({rescate['narrativa']['meta_pct']*100-100:.0f}% sobre tu nuevo promedio)")
+                            st.caption(
+                                f"Objetivo de salida: **{rescate['narrativa']['nombre_meta']}** "
+                                f"({rescate['narrativa']['meta_pct'] * 100 - 100:.0f}% sobre tu nuevo promedio)"
+                            )
 
                             for nivel in rescate['niveles']:
                                 color_borde = "#2ea043" if "Conservador" in nivel['nombre'] else ("#d29922" if "Moderado" in nivel['nombre'] else "#f85149")
                                 st.markdown(f"""
                                 <div class="rescate-card" style="border-left-color: {color_borde};">
                                     <b>{nivel['nombre']}</b><br>
-                                    💵 Capital a inyectar: <b>${nivel['capital_extra']:,.2f}</b> · 
+                                    💵 Capital a inyectar: <b>${nivel['capital_extra']:,.2f}</b> &nbsp;·&nbsp;
                                     Títulos nuevos: <b>{nivel['nuevos_titulos']:.4f}</b><br>
-                                    📊 Nuevo promedio: <b>${nivel['nuevo_promedio']:,.2f}</b> 
-                                    (antes: <b>${rescate['precio_promedio']:,.2f}</b>) · 
+                                    📊 Nuevo promedio: <b>${nivel['nuevo_promedio']:,.2f}</b>
+                                    &nbsp;(antes: <b>${rescate['precio_promedio']:,.2f}</b>) &nbsp;·&nbsp;
                                     Reducción: <b>{nivel['distancia_a_tablas']:.1f}% a tablas</b><br>
-                                    🎯 Precio objetivo ({rescate['narrativa']['nombre_meta']}): 
-                                    <b>${nivel['precio_meta']:,.2f}</b> → 
+                                    🎯 {rescate['narrativa']['nombre_meta']}:
+                                    <b>${nivel['precio_meta']:,.2f}</b> &nbsp;→&nbsp;
                                     Ganancia neta: <b>${nivel['ganancia_en_meta']:,.2f}</b>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -677,15 +680,17 @@ if "Comunidad" not in modo:
                     elif rendimiento > 0:
                         st.success(f"🎉 **¡En ganancia! +${ganancia_perdida:,.2f} ({rendimiento:.2f}%)**")
 
-                        # Objetivo de toma de ganancias
-                        narrativa = narrativas[categoria]
-                        precio_meta = precio_promedio * narrativa["meta_pct"]
+                        narrativa    = narrativas[categoria]
+                        precio_meta  = precio_promedio * narrativa["meta_pct"]
                         if precio_actual >= precio_meta:
                             st.balloons()
                             st.success(f"🏆 **¡Alcanzaste el objetivo {narrativa['nombre_meta']}!** Considera tomar ganancias parciales.")
                         else:
                             falta = precio_meta - precio_actual
-                            st.info(f"🎯 Objetivo {narrativa['nombre_meta']}: **${precio_meta:,.2f}** · Faltan **${falta:,.2f}** ({((precio_meta/precio_actual)-1)*100:.1f}%)")
+                            st.info(
+                                f"🎯 Objetivo {narrativa['nombre_meta']}: **${precio_meta:,.2f}** · "
+                                f"Faltan **${falta:,.2f}** ({((precio_meta / precio_actual) - 1) * 100:.1f}%)"
+                            )
 
             except Exception as e:
                 st.error(f"⚠️ Error inesperado: {e}")
@@ -703,11 +708,11 @@ else:
     with col_c1:
         st.markdown("### 📝 Publica tu Estrategia")
         with st.form("crear_estrategia"):
-            autor = st.text_input("Tu Nombre o Nickname:", placeholder="ej. Lobo de Wall Street")
-            activo = st.text_input("Activo / Símbolo:", placeholder="ej. BTC-USD, GMEXICO, S&P 500").upper()
-            cat_comm = st.selectbox("Categoría:", list(narrativas.keys()))
+            autor      = st.text_input("Tu Nombre o Nickname:", placeholder="ej. Lobo de Wall Street")
+            activo     = st.text_input("Activo / Símbolo:", placeholder="ej. BTC-USD, GMEXICO, S&P 500").upper()
+            cat_comm   = st.selectbox("Categoría:", list(narrativas.keys()))
             estrategia = st.text_area("Tu Estrategia Detallada:", placeholder="ej. Comprar si rompe la resistencia de los $X, buscando el techo en $Y. Stop Loss en $Z.", height=120)
-            publicar = st.form_submit_button("📢 Publicar en Comunidad")
+            publicar   = st.form_submit_button("📢 Publicar en Comunidad")
             if publicar:
                 if autor and activo and estrategia:
                     st.session_state['community_strategies'].insert(0, {
@@ -726,7 +731,7 @@ else:
             st.markdown(f"""
             <div class="strategy-card">
                 <b>👤 Autor: {estr['autor']}</b><br>
-                <small>Activo: {estr['activo']} | Categoría: {estr.get('categoria','—')} | Publicado: {estr['fecha']}</small><br><br>
+                <small>Activo: {estr['activo']} | Categoría: {estr.get('categoria', '—')} | Publicado: {estr['fecha']}</small><br><br>
                 {estr['estrategia']}
             </div>
             """, unsafe_allow_html=True)
