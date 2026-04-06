@@ -1272,7 +1272,7 @@ if "Comunidad" not in modo:
                     conclusion = (
                         f"En conclusión, {nombre_empresa} muestra señales de debilidad técnica. "
                         f"El riesgo principal es una extensión de la caída hacia el piso anual en **${piso_anual:,.2f}**. "
-                        f"Se recomienda no agregar posiciones hasta que el precio estabilice sobre su
+                        "Se recomienda no agregar posiciones hasta que el precio estabilice sobre su M
 ...
 
 [Mensaje acortado]  Ver mensaje completo
