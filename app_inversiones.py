@@ -180,10 +180,6 @@ def pantalla_login():
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
-if not st.session_state["autenticado"]:
-    pantalla_login()
-    st.stop()
-
 # ─────────────────────────────────────────────
 # FUNCIÓN: ESCALONES DE SOPORTE
 # ─────────────────────────────────────────────
@@ -585,6 +581,130 @@ def calcular_rescate(cant_actual, inv_total_orig, precio_mercado, cat_sel, techo
         "narrativa": narrativa
     }
 
+
+# ─────────────────────────────────────────────
+# MOTOR PRO VITERBI (simplificado sin HMM externo)
+# ─────────────────────────────────────────────
+def motor_pro_viterbi(df, rsi_actual, score_semaforo):
+    caida_reciente = (df["Close"].iloc[-1] / df["High"].max() - 1) * 100
+    vol_avg = df["Volume"].rolling(20).mean().iloc[-1]
+    volumen_stop = df["Volume"].iloc[-1] > vol_avg * 1.5
+
+    estado = "LATERAL"
+    if score_semaforo >= 6:
+        estado = "ALCISTA"
+    elif score_semaforo <= -2:
+        estado = "BAJISTA"
+
+    rebote_confirmado = (
+        caida_reciente < -3.0
+        and volumen_stop
+        and df["Close"].iloc[-1] > df["Open"].iloc[-1]
+    )
+    return estado, rebote_confirmado, caida_reciente
+
+# ─────────────────────────────────────────────
+# CALCULADOR DE LIQUIDACIÓN REAL (GBM + ISR MX)
+# ─────────────────────────────────────────────
+def calcular_efectivo_real(precio_venta, precio_compra, titulos):
+    inversion     = precio_compra * titulos
+    venta_bruta   = precio_venta  * titulos
+    ganancia_bruta = venta_bruta - inversion
+    comision_gbm  = venta_bruta * 0.0025 * 1.16          # 0.25% + IVA 16%
+    impuesto_isr  = max(0, (ganancia_bruta - comision_gbm) * 0.10)  # 10% ISR
+    efectivo_limpio = venta_bruta - comision_gbm - impuesto_isr
+    return efectivo_limpio, ganancia_bruta, comision_gbm, impuesto_isr
+
+# ─────────────────────────────────────────────
+# BOT DE ESTRATEGIA — VEREDICTO MAESTRO
+# ─────────────────────────────────────────────
+def bot_sentencia_lino(es_portafolio, estado_pro, rebote, rendimiento, ma200, precio_actual, rsi):
+    """Genera el mensaje de voz/texto del Bot y el HTML del widget con bocina."""
+    if es_portafolio:
+        if rendimiento < -10:
+            if rebote:
+                msg = (f"Ejecuta Rescate. La caída fue dura pero el volumen confirma rebote. "
+                       f"No esperes más, baja tu promedio ahora.")
+                emoji = "🔥"
+                color = "#2ea043"
+            elif ma200 and precio_actual < ma200:
+                msg = ("Alto. Estás en zona de pérdida y bajo la MA200. "
+                       "No metas más dinero. Es una trampa. Espera soporte real.")
+                emoji = "🛑"
+                color = "#f85149"
+            else:
+                msg = ("Paciencia. El mercado está sangrando. "
+                       "Mantén disciplina. No operes por emoción.")
+                emoji = "⏳"
+                color = "#d29922"
+        elif rendimiento > 5:
+            msg = ("Momento de cobrar. Vas en verde. "
+                   "Considera tomar el cincuenta por ciento de ganancias para reinvertir en oportunidades de piso.")
+            emoji = "💰"
+            color = "#2ea043"
+        else:
+            msg = ("Posición estable. Monitorea el soporte mensual y espera confirmación antes de mover capital.")
+            emoji = "📡"
+            color = "#58a6ff"
+    else:
+        if estado_pro == "ALCISTA" and rebote:
+            msg = ("Entrada de élite detectada. Confirmación de giro alcista. Alta probabilidad. Considera entrar ahora.")
+            emoji = "🎯"
+            color = "#2ea043"
+        elif estado_pro == "BAJISTA":
+            msg = ("Motor detecta debilidad estructural. Aunque veas señales verdes, espera mejor confirmación.")
+            emoji = "⚠️"
+            color = "#d29922"
+        else:
+            msg = ("Escaneando mercado. No hay señales de alta probabilidad. Un ganador sabe cuándo no jugar.")
+            emoji = "📡"
+            color = "#58a6ff"
+
+    return msg, emoji, color
+
+def render_bot_voz(msg, emoji, color, ticker):
+    """Renderiza el widget del bot con botón de bocina y Web Speech API."""
+    msg_js = msg.replace("'", " ").replace('"', ' ').replace("\n", " ")
+    components.html(f"""
+    <div style="background:linear-gradient(135deg,#161b22,#1c2128); border:2px solid {color};
+         border-radius:16px; padding:20px 24px; margin:12px 0; display:flex;
+         align-items:flex-start; gap:16px;">
+        <div style="font-size:2.2rem; line-height:1;">{emoji}</div>
+        <div style="flex:1;">
+            <div style="color:{color}; font-weight:700; font-size:0.85rem; margin-bottom:4px;">
+                🤖 VEREDICTO MAESTRO AI.lino · {ticker}
+            </div>
+            <div style="color:#e6edf3; font-size:1rem; line-height:1.6;" id="bot_msg_{ticker.replace('.','_')}">
+                {msg}
+            </div>
+        </div>
+        <button onclick="hablarBot()" title="Escuchar veredicto"
+            style="background:{color}; border:none; border-radius:50%; width:48px; height:48px;
+            font-size:1.4rem; cursor:pointer; flex-shrink:0; box-shadow:0 0 16px {color}66;">
+            🔊
+        </button>
+    </div>
+    <script>
+    function hablarBot() {{
+        if ('speechSynthesis' in window) {{
+            window.speechSynthesis.cancel();
+            var u = new SpeechSynthesisUtterance('{msg_js}');
+            u.lang = 'es-MX';
+            u.rate = 0.95;
+            u.pitch = 1.0;
+            var voices = window.speechSynthesis.getVoices();
+            var esp = voices.find(v => v.lang && v.lang.startsWith('es'));
+            if (esp) u.voice = esp;
+            window.speechSynthesis.speak(u);
+        }} else {{
+            alert('Tu navegador no soporta síntesis de voz.');
+        }}
+    }}
+    // Pre-cargar voces
+    window.speechSynthesis.getVoices();
+    </script>
+    """, height=140)
+
 # ─────────────────────────────────────────────
 # 5. SESSION STATE
 # ─────────────────────────────────────────────
@@ -601,19 +721,32 @@ if 'community_strategies' not in st.session_state:
 # ─────────────────────────────────────────────
 # 6. HEADER
 # ─────────────────────────────────────────────
-col_h1, col_h2, col_h3 = st.columns([6, 2, 1])
-with col_h1:
-    nombre_usr = st.session_state.get("usuario_nombre", "")
-    st.title("🧠 AI.lino")
-    st.markdown(f"### Simulador de Mercado · Análisis VIP · Comunidad de Estrategias &nbsp; <small style='color:#8b949e;'>Hola, {nombre_usr} 👋</small>", unsafe_allow_html=True)
-with col_h2:
-    st.write("<br>", unsafe_allow_html=True)
+# ── SIDEBAR ─────────────────────────────────────
+with st.sidebar:
+    st.markdown("## 🧠 AI.lino")
+    st.caption("Motor de Inversión Inteligente")
+    st.markdown("---")
+    st.markdown("### 🚀 Herramientas de Élite")
+    st.link_button("Ir a AI.Lino PRO (Viterbi)", "https://ailinopro-maquina-dinero-lino.streamlit.app/",
+                   use_container_width=True)
+    st.caption("Usa el Motor Pro para confirmar señales de entrada y salida con precisión HMM.")
+    st.markdown("---")
     st.link_button("🎁 Apoyar el proyecto", "https://buymeacoffee.com/Hugo.lino", use_container_width=True)
-with col_h3:
-    st.write("<br>", unsafe_allow_html=True)
-    if st.button("🔒 Salir", use_container_width=True):
-        st.session_state["autenticado"] = False
-        st.rerun()
+
+# ── HEADER ───────────────────────────────────────
+col_h1, col_h2 = st.columns([8, 2])
+with col_h1:
+    st.title("🧠 AI.lino")
+    st.markdown("### Simulador de Mercado · Análisis VIP · Comunidad de Estrategias")
+with col_h2:
+    # Botón salir solo visible si está autenticado (Modo Portafolio)
+    if st.session_state.get("autenticado"):
+        nombre_usr = st.session_state.get("usuario_nombre", "")
+        st.write("<br>", unsafe_allow_html=True)
+        st.caption(f"🔐 Sesión VIP: {nombre_usr}")
+        if st.button("🔒 Salir", use_container_width=True):
+            st.session_state["autenticado"] = False
+            st.rerun()
 
 st.markdown("---")
 
@@ -711,6 +844,20 @@ if "Comunidad" not in modo:
 
                 st.write("")
 
+                # ── MOTOR PRO + BOT DE VOZ ────────────────────
+                estado_pro, rebote_pro, caida_pro = motor_pro_viterbi(
+                    df_1y, analisis["rsi"], analisis["puntos"]
+                )
+                es_portafolio = "Portafolio" in modo
+                rendimiento_bot = ((precio_actual / (total_inv / cant) - 1) * 100
+                                   if es_portafolio and cant > 0 and total_inv > 0
+                                   else 0)
+                msg_bot, emoji_bot, color_bot = bot_sentencia_lino(
+                    es_portafolio, estado_pro, rebote_pro,
+                    rendimiento_bot, analisis["ma200"], precio_actual, analisis["rsi"]
+                )
+                render_bot_voz(msg_bot, emoji_bot, color_bot, ticker_limpio)
+
                 col_r, col_a = st.columns(2)
                 with col_r:
                     st.markdown("#### ✅ Señales Positivas")
@@ -777,6 +924,11 @@ if "Comunidad" not in modo:
                 # MODO PORTAFOLIO — Suite VIP
                 # ─────────────────────────────
                 else:
+                    # ── LOGIN exclusivo del Modo Portafolio ──────
+                    if not st.session_state.get("autenticado"):
+                        pantalla_login()
+                        st.stop()
+
                     precio_promedio  = total_inv / cant if cant > 0 else 0
                     valor_actual     = precio_actual * cant
                     ganancia_perdida = valor_actual - total_inv
@@ -970,6 +1122,162 @@ if "Comunidad" not in modo:
                                 f"🎯 Objetivo {narrativa_sc['nombre_meta']}: **${precio_meta_obj:,.2f}** · "
                                 f"Faltan **${falta:,.2f}** ({((precio_meta_obj / precio_actual) - 1) * 100:.1f}%)"
                             )
+
+                        # ── CALCULADORA DE LIQUIDACIÓN REAL ──────────
+                        st.markdown("---")
+                        st.markdown("### 💸 Calculadora de Liquidación Real — GBM México")
+                        st.caption("Simula cuánto efectivo limpio recibirías si vendes hoy, ya con comisión GBM y ISR.")
+                        precio_venta_sim = st.number_input(
+                            "Precio de venta a simular ($):",
+                            min_value=0.01,
+                            value=float(round(precio_actual, 2)),
+                            format="%.2f",
+                            key="precio_venta_sim"
+                        )
+                        if precio_venta_sim > 0:
+                            limpio, g_bruta, com, isr = calcular_efectivo_real(
+                                precio_venta_sim, precio_promedio, cant
+                            )
+                            liq1, liq2, liq3, liq4 = st.columns(4)
+                            liq1.metric("💵 Efectivo Real", f"${limpio:,.2f}",
+                                        help="Lo que llega a tu cuenta después de comisión e ISR")
+                            liq2.metric("📈 Ganancia Bruta", f"${g_bruta:,.2f}")
+                            liq3.metric("🏦 Comisión GBM", f"${com:,.2f}",
+                                        help="0.25% + IVA 16% sobre el monto de venta")
+                            liq4.metric("🏛️ ISR (10%)", f"${isr:,.2f}",
+                                        help="10% sobre ganancia neta")
+                            if limpio > total_inv:
+                                st.success(f"✅ Ganancia neta real después de impuestos: **${limpio - total_inv:,.2f}**")
+                            else:
+                                st.warning(f"⚠️ Después de comisiones e ISR aún estarías en pérdida neta.")
+
+
+                # ═══════════════════════════════════════════════
+                # REPORTE IA — ANÁLISIS NARRATIVO DE LA EMPRESA
+                # ═══════════════════════════════════════════════
+                st.markdown("---")
+                st.markdown("## 📰 Reporte AI.lino — Análisis Situacional")
+                st.caption(f"Generado con los datos actuales de {nombre_empresa} · {ticker_limpio} · Sector: {sector}")
+
+                # Construir contexto para el reporte
+                ma200_txt  = f"${analisis['ma200']:,.2f}" if analisis['ma200'] else "no disponible"
+                pe_txt     = f"{analisis['pe_ratio']:.1f}x" if analisis['pe_ratio'] else "no disponible"
+                tend_txt   = "ALCISTA" if precio_actual > analisis['ma50'] else "BAJISTA"
+                ma200_pos  = ("por encima" if analisis['ma200'] and precio_actual > analisis['ma200']
+                              else "por debajo" if analisis['ma200'] else "sin dato")
+                vol_txt    = ("con volumen elevado — posible movimiento institucional"
+                              if df_1y['Volume'].iloc[-1] > df_1y['Volume'].rolling(20).mean().iloc[-1] * 1.3
+                              else "con volumen normal")
+                rsi_desc   = ("en zona de sobreventa" if analisis['rsi'] < 35
+                              else "en sobrecompra" if analisis['rsi'] > 65 else "en zona neutral")
+                bb_pos     = ("bajo la banda inferior — zona de rebote potencial"
+                              if precio_actual < analisis['bb_low']
+                              else "sobre la banda superior — sobreextendido"
+                              if precio_actual > analisis['bb_up'] else "dentro de las bandas")
+                caida_anual = ((precio_actual / techo_y) - 1) * 100
+                rebote_anual = ((precio_actual / piso_anual) - 1) * 100
+                estado_hmm  = estado_pro if 'estado_pro' in dir() else "LATERAL"
+
+                # Párrafo 1: Situación técnica actual
+                p1 = (
+                    f"{nombre_empresa} ({ticker_limpio}) cotiza actualmente en **${precio_actual:,.2f}**, "
+                    f"en tendencia {tend_txt} de corto plazo, operando {ma200_pos} de su MA200 ({ma200_txt}). "
+                    f"El RSI de 14 días se encuentra en **{analisis['rsi']:.1f}**, {rsi_desc}, "
+                    f"y el precio se ubica {bb_pos}. "
+                    f"Respecto a su rango anual, el activo se encuentra un **{abs(caida_anual):.1f}%** "
+                    f"{'por debajo de' if caida_anual < 0 else 'por encima de'} su máximo y un "
+                    f"**{rebote_anual:.1f}%** por encima de su mínimo anual."
+                )
+
+                # Párrafo 2: Lectura del volumen y momentum
+                macd_val, señal_val = df_1y['Close'].ewm(span=12,adjust=False).mean().iloc[-1] - df_1y['Close'].ewm(span=26,adjust=False).mean().iloc[-1], 0
+                macd_dir = "positivo" if macd_val > 0 else "negativo"
+                p2 = (
+                    f"El volumen reciente opera {vol_txt}. "
+                    f"El MACD muestra momentum {macd_dir}, "
+                    f"{'confirmando presión compradora' if macd_dir == 'positivo' else 'sugiriendo presión vendedora'}. "
+                    f"El Motor Pro Viterbi clasifica el estado actual del activo como **{estado_hmm}**"
+                    f"{', con señal de rebote confirmada por volumen' if rebote_pro else ', sin confirmación de rebote aún'}."
+                )
+
+                # Párrafo 3: Contexto fundamental
+                if analisis['pe_ratio']:
+                    if analisis['pe_ratio'] < 15:
+                        fund_txt = f"Su P/E de {pe_txt} la ubica en zona de valor atractivo según el método Lynch."
+                    elif analisis['pe_ratio'] < 30:
+                        fund_txt = f"Su P/E de {pe_txt} es razonable para el sector {sector}."
+                    else:
+                        fund_txt = f"Su P/E de {pe_txt} refleja valuación elevada — el mercado paga prima por crecimiento esperado."
+                else:
+                    fund_txt = f"No se dispone de P/E actualizado para {ticker_limpio} en Yahoo Finance."
+
+                p3 = (
+                    f"Desde la perspectiva fundamental, {fund_txt} "
+                    f"El semáforo AI.lino emite señal **{analisis['decision']}** "
+                    f"con un score técnico de **{analisis['puntos']:+d} puntos**. "
+                    f"{'Los fundamentos y la técnica están alineados favorablemente.' if analisis['puntos'] >= 4 else 'Se recomienda esperar mayor confluencia de señales antes de operar.'}"
+                )
+
+                # Párrafo 4: Conclusión operativa
+                if analisis['color'] == 'verde':
+                    conclusion = (
+                        f"En conclusión, {nombre_empresa} presenta una configuración técnica favorable. "
+                        f"Los niveles de soporte clave a monitorear son el piso mensual en **${piso_m:,.2f}** "
+                        f"y el piso anual en **${piso_anual:,.2f}**. "
+                        f"Una ruptura sostenida por encima de la MA200 ({ma200_txt}) confirmaría la continuación alcista."
+                    )
+                elif analisis['color'] == 'rojo':
+                    conclusion = (
+                        f"En conclusión, {nombre_empresa} muestra señales de debilidad técnica. "
+                        f"El riesgo principal es una extensión de la caída hacia el piso anual en **${piso_anual:,.2f}**. "
+                        f"Se recomienda no agregar posiciones hasta que el precio estabilice sobre su MA50 (${analisis['ma50']:,.2f})."
+                    )
+                else:
+                    conclusion = (
+                        f"En conclusión, {nombre_empresa} se encuentra en una zona de decisión. "
+                        f"El soporte más cercano es **${piso_m:,.2f}** (piso mensual). "
+                        f"El catalizador para una entrada de menor riesgo sería un cierre por encima de la MA50 (${analisis['ma50']:,.2f}) "
+                        f"con volumen superior al promedio."
+                    )
+
+                # Renderizar el reporte
+                st.markdown(f"""
+                <div style="background:linear-gradient(135deg,#0d1117,#161b22); border:1px solid #30363d;
+                     border-radius:16px; padding:28px 32px; line-height:1.9; color:#e6edf3;">
+                    <p style="margin-bottom:14px;">{p1}</p>
+                    <p style="margin-bottom:14px;">{p2}</p>
+                    <p style="margin-bottom:14px;">{p3}</p>
+                    <p style="margin-bottom:0; border-top:1px solid #30363d; padding-top:14px;
+                       color:#58a6ff;">{conclusion}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Botón de voz para el reporte completo
+                reporte_completo = f"{p1} {p2} {p3} {conclusion}"
+                reporte_js = reporte_completo.replace("'", " ").replace('"', ' ').replace("**", "").replace("$", " dólares ")
+                components.html(f"""
+                <div style="text-align:right; margin-top:8px;">
+                    <button onclick="leerReporte()" title="Escuchar reporte completo"
+                        style="background:#30363d; border:1px solid #58a6ff; border-radius:8px;
+                        padding:8px 16px; color:#58a6ff; font-size:0.9rem; cursor:pointer;">
+                        🔊 Escuchar reporte completo
+                    </button>
+                </div>
+                <script>
+                function leerReporte() {{
+                    if ('speechSynthesis' in window) {{
+                        window.speechSynthesis.cancel();
+                        var u = new SpeechSynthesisUtterance('{reporte_js}');
+                        u.lang = 'es-MX'; u.rate = 0.92; u.pitch = 1.0;
+                        var voices = window.speechSynthesis.getVoices();
+                        var esp = voices.find(v => v.lang && v.lang.startsWith('es'));
+                        if (esp) u.voice = esp;
+                        window.speechSynthesis.speak(u);
+                    }}
+                }}
+                window.speechSynthesis.getVoices();
+                </script>
+                """, height=60)
 
             except Exception as e:
                 st.error(f"⚠️ Error inesperado: {e}")
