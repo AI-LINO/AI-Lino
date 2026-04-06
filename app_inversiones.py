@@ -726,6 +726,172 @@ with st.sidebar:
     st.markdown("## 🧠 AI.lino")
     st.caption("Motor de Inversión Inteligente")
     st.markdown("---")
+
+    # ── ANÁLISIS IA EN SIDEBAR ────────────────────
+    st.markdown("### 🤖 Análisis IA Profundo")
+    st.caption("Técnico + Fundamental + Noticias + Recomendación")
+
+    ticker_ia = st.text_input("Símbolo a analizar:", value="TSLA",
+                               key="sidebar_ticker_ia",
+                               placeholder="TSLA, GMEXICOB.MX, MNDI.L...")
+
+    if st.button("🔍 Generar Análisis Completo", use_container_width=True, key="btn_analisis_ia"):
+        st.session_state["sidebar_analisis_solicitado"] = True
+        st.session_state["sidebar_ticker_analizado"] = ticker_ia.upper().strip()
+
+    if st.session_state.get("sidebar_analisis_solicitado") and st.session_state.get("sidebar_ticker_analizado"):
+        t_ia = st.session_state["sidebar_ticker_analizado"]
+        with st.spinner(f"Analizando {t_ia}..."):
+            try:
+                import yfinance as _yf, numpy as _np, json as _json, urllib.request as _ur
+
+                _stock = _yf.Ticker(limpiar_ticker(t_ia))
+                _df    = _stock.history(period="1y")
+                _info  = {}
+                try: _info = _stock.info
+                except: pass
+
+                if not _df.empty:
+                    _pc    = float(_df['Close'].iloc[-1])
+                    _ma50  = float(_df['Close'].rolling(50).mean().iloc[-1])
+                    _ma200 = float(_df['Close'].rolling(200).mean().iloc[-1]) if len(_df) >= 200 else None
+                    _techo = float(_df['High'].max())
+                    _piso  = float(_df['Low'].min())
+                    _rsi_d = _df['Close'].diff()
+                    _g     = _rsi_d.clip(lower=0).rolling(14).mean()
+                    _l     = (-_rsi_d.clip(upper=0)).rolling(14).mean()
+                    _rsi   = float(100 - 100/(1 + _g/_l.replace(0,_np.nan))).iloc[-1] if not _l.empty else 50
+                    _vol_r = float(_df['Volume'].iloc[-1] / _df['Volume'].rolling(20).mean().iloc[-1])
+                    _macd  = float(_df['Close'].ewm(span=12,adjust=False).mean().iloc[-1] -
+                                   _df['Close'].ewm(span=26,adjust=False).mean().iloc[-1])
+                    _pe    = _info.get('trailingPE')
+                    _name  = _info.get('longName', t_ia)
+                    _sect  = _info.get('sector','N/D')
+                    _pais  = _info.get('country','N/D')
+                    _52wH  = _info.get('fiftyTwoWeekHigh', _techo)
+                    _52wL  = _info.get('fiftyTwoWeekLow', _piso)
+                    _mktcap = _info.get('marketCap')
+                    _div   = _info.get('dividendYield')
+                    _beta  = _info.get('beta')
+                    _rev_g = _info.get('revenueGrowth')
+                    _margin = _info.get('profitMargins')
+                    _deuda = _info.get('debtToEquity')
+
+                    _ma200_str = str(round(_ma200,2)) if _ma200 else "N/D"
+                    _ma200_pos = "SOBRE" if _ma200 and _pc > _ma200 else ("BAJO" if _ma200 else "SIN DATO")
+                    _pe_str    = f"{_pe:.1f}" if _pe else "N/D"
+                    _margin_str = f"{_margin*100:.1f}%" if _margin else "N/D"
+                    _rev_str   = f"{_rev_g*100:.1f}%" if _rev_g else "N/D"
+                    _deuda_str = f"{_deuda:.0f}%" if _deuda else "N/D"
+                    _mktcap_str = f"${_mktcap/1e9:.1f}B" if _mktcap else "N/D"
+                    _div_str   = f"{_div*100:.2f}%" if _div else "N/D"
+                    _tend_str  = "alcista" if _pc > _ma50 else "bajista"
+                    _caida_str = f"{((_pc/_52wH)-1)*100:.1f}%"
+                    _rebote_str = f"{((_pc/_52wL)-1)*100:.1f}%"
+                    _macd_dir  = "positivo" if _macd > 0 else "negativo"
+                    _beta_str  = str(round(_beta,2)) if _beta else "N/D"
+                    _vol_str   = f"{_vol_r:.2f}x"
+
+                    prompt_deep = (
+                        "Eres el mejor analista financiero del mundo, especializado en mercados de Mexico, EE.UU. y Europa. "
+                        "Tu analisis es PROFUNDO, HUMANO y ACCIONABLE. Hablas directo, con criterio propio. "
+                        "NO uses frases genericas. Cada parrafo debe aportar valor real al inversor. "
+                        "Busca patrones, riesgos ocultos y oportunidades reales en los datos. "
+                        f"=== DATOS COMPLETOS DE {_name} ({t_ia}) === "
+                        f"Precio: ${_pc:,.2f} | Sector: {_sect} | Pais: {_pais} | "
+                        f"Tendencia vs MA50: {_tend_str} | MA50: ${_ma50:,.2f} | MA200: {_ma200_str} ({_ma200_pos}) | "
+                        f"RSI: {_rsi:.1f} | MACD: {_macd_dir} ({_macd:,.2f}) | "
+                        f"Volumen relativo: {_vol_str} | Beta: {_beta_str} | "
+                        f"Maximo 52s: ${_52wH:,.2f} | Minimo 52s: ${_52wL:,.2f} | "
+                        f"Caida desde maximo: {_caida_str} | Rebote desde minimo: {_rebote_str} | "
+                        f"P/E: {_pe_str} | Margen neto: {_margin_str} | "
+                        f"Crecimiento ingresos: {_rev_str} | Deuda/Capital: {_deuda_str} | "
+                        f"Cap. mercado: {_mktcap_str} | Dividendo: {_div_str}. "
+                        "Escribe el analisis en ESPANOL con estas 5 secciones (sin asteriscos ni markdown): "
+                        "1. PANORAMA ACTUAL: Que esta pasando HOY. Contexto del mercado y del sector. Por que esta donde esta. Especifico con numeros. "
+                        "2. RADIOGRAFIA TECNICA: Interpreta RSI, MACD, MA50, MA200 y volumen como medico leyendo resultados. Di que senales son confiables y cuales son trampas. Identifica divergencias. "
+                        "3. FUNDAMENTOS Y SALUD FINANCIERA: Analiza P/E, margen, crecimiento, deuda y dividendo. Compara con lo normal del sector. Di si la empresa es solida o tiene problemas ocultos. "
+                        "4. RIESGOS REALES: Los 3 riesgos mas importantes ahora mismo. Cuanto puede bajar en el peor escenario. Que nivel romper seria peligro real. "
+                        "5. VEREDICTO Y PLAN DE ACCION: Precio de entrada ideal, stop loss logico, objetivo con plazo. Una frase final memorable. "
+                        "Maximo 500 palabras. Directo, sin relleno."
+                    )
+
+                    api_key = st.secrets.get("anthropic", {}).get("api_key", "")
+                    if api_key:
+                        payload = _json.dumps({
+                            "model": "claude-sonnet-4-20250514",
+                            "max_tokens": 1200,
+                            "messages": [{"role": "user", "content": prompt_deep}]
+                        }).encode()
+                        req = _ur.Request(
+                            "https://api.anthropic.com/v1/messages", data=payload,
+                            headers={"Content-Type": "application/json",
+                                     "x-api-key": api_key,
+                                     "anthropic-version": "2023-06-01"}, method="POST"
+                        )
+                        with _ur.urlopen(req, timeout=30) as resp:
+                            analisis_ia = _json.loads(resp.read())["content"][0]["text"]
+                        st.session_state["sidebar_resultado_ia"] = analisis_ia
+                        st.session_state["sidebar_ticker_resultado"] = t_ia
+                    else:
+                        st.session_state["sidebar_resultado_ia"] = (
+                            "Configura tu API key de Anthropic en Streamlit Secrets para activar la IA real. "
+                            f"Resumen basico de {_name}: "
+                            f"Precio ${_pc:,.2f} | RSI {_rsi:.1f} | Tendencia {_tend_str} vs MA50. "
+                            f"{'Sobre MA200 - estructura de largo plazo positiva.' if _ma200 and _pc > _ma200 else 'Bajo MA200 - precaucion en largo plazo.'}"
+                        )
+                        st.session_state["sidebar_ticker_resultado"] = t_ia
+                else:
+                    st.session_state["sidebar_resultado_ia"] = f"No se encontraron datos para {t_ia}. Verifica el simbolo."
+                    st.session_state["sidebar_ticker_resultado"] = t_ia
+
+            except Exception as _e:
+                st.session_state["sidebar_resultado_ia"] = f"Error al analizar: {_e}"
+                st.session_state["sidebar_ticker_resultado"] = t_ia
+
+    # Mostrar resultado en expander
+    if st.session_state.get("sidebar_resultado_ia"):
+        t_res = st.session_state.get("sidebar_ticker_resultado", "")
+        with st.expander(f"📊 Análisis IA: {t_res}", expanded=True):
+            resultado_txt = st.session_state["sidebar_resultado_ia"]
+            st.markdown(f"""
+            <div style="font-size:0.82rem; line-height:1.7; color:#e6edf3;
+                 white-space:pre-line;">{resultado_txt}</div>
+            """, unsafe_allow_html=True)
+
+            # Bocina
+            voz_safe = resultado_txt.replace("'", " ").replace('"', " ").replace("$", " dolares ").replace("\n", ". ")[:2000]
+            components.html(f"""
+            <button onclick="hablarIA()" style="background:#1c2128; border:1px solid #58a6ff;
+                border-radius:6px; padding:6px 14px; color:#58a6ff; font-size:0.8rem;
+                cursor:pointer; margin-top:8px; width:100%;">
+                🔊 Escuchar análisis
+            </button>
+            <script>
+            function hablarIA() {{
+                if (!('speechSynthesis' in window)) return;
+                window.speechSynthesis.cancel();
+                var u = new SpeechSynthesisUtterance(`{voz_safe}`);
+                u.lang='es-MX'; u.rate=0.92; u.pitch=1.0;
+                function sv() {{
+                    var vs=window.speechSynthesis.getVoices();
+                    var e=vs.find(function(v){{return v.lang&&v.lang.startsWith('es');}});
+                    if(e) u.voice=e;
+                    window.speechSynthesis.speak(u);
+                }}
+                if(window.speechSynthesis.getVoices().length>0){{sv();}}
+                else{{window.speechSynthesis.onvoiceschanged=sv;}}
+            }}
+            window.speechSynthesis.getVoices();
+            </script>
+            """, height=50)
+
+            if st.button("🗑️ Limpiar análisis", key="limpiar_ia_sidebar"):
+                st.session_state["sidebar_resultado_ia"] = None
+                st.session_state["sidebar_analisis_solicitado"] = False
+                st.rerun()
+
+    st.markdown("---")
     st.markdown("### 🚀 Herramientas de Élite")
     st.link_button("Ir a AI.Lino PRO (Viterbi)", "https://ailinopro-maquina-dinero-lino.streamlit.app/",
                    use_container_width=True)
@@ -1210,13 +1376,6 @@ if "Comunidad" not in modo:
                             else:
                                 st.warning(f"⚠️ Después de comisiones e ISR aún estarías en pérdida neta en esta venta.")
 
-
-                # ═══════════════════════════════════════════════
-                # REPORTE IA — ANÁLISIS NARRATIVO DE LA EMPRESA
-                # ═══════════════════════════════════════════════
-                st.markdown("---")
-                st.markdown("## 📰 Reporte AI.lino — Análisis Situacional")
-                st.caption(f"Generado con los datos actuales de {nombre_empresa} · {ticker_limpio} · Sector: {sector}")
 
                 # ═══════════════════════════════════════════════
                 # REPORTE AI.lino — IA Real + fallback estático
