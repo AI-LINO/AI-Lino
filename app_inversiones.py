@@ -114,11 +114,183 @@ div[data-testid="stNumberInput"] label {
 }
 
 .stAlert { border-radius: 10px !important; }
+
+.escalon-card {
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 8px 0;
+    line-height: 1.8;
+    border-left: 6px solid #ccc;
+}
+.escalon-activo {
+    background: linear-gradient(135deg, #1a1f2e, #1c2540);
+    border-left-color: #58a6ff !important;
+    box-shadow: 0 0 20px rgba(88,166,255,0.2);
+}
+.escalon-pendiente {
+    background: #1c2128;
+    border-left-color: #30363d !important;
+    opacity: 0.85;
+}
+.login-box {
+    max-width: 400px;
+    margin: 60px auto;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    padding: 40px;
+    box-shadow: 0 0 40px rgba(88,166,255,0.15);
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# 3. DICCIONARIO LYNCH
+# 3. SISTEMA DE LOGIN
+# ─────────────────────────────────────────────
+def verificar_login(usuario, password):
+    try:
+        return (usuario.strip() == st.secrets["auth"]["username"] and
+                password == st.secrets["auth"]["password"])
+    except Exception:
+        return False
+
+def pantalla_login():
+    st.markdown("""
+    <div style='text-align:center; padding:50px 0 20px 0;'>
+        <span style='font-size:3.5rem;'>🧠</span>
+        <h1 style='color:#58a6ff; margin:10px 0;'>AI.lino</h1>
+        <p style='color:#8b949e; font-size:1.1rem;'>Motor de Inversión — Acceso Privado</p>
+    </div>
+    """, unsafe_allow_html=True)
+    col = st.columns([1, 1.1, 1])[1]
+    with col:
+        with st.form("login_form"):
+            st.markdown("#### 🔐 Iniciar Sesión")
+            usuario  = st.text_input("Usuario", placeholder="tu usuario")
+            password = st.text_input("Contraseña", type="password", placeholder="••••••••")
+            entrar   = st.form_submit_button("Entrar →", use_container_width=True)
+            if entrar:
+                if verificar_login(usuario, password):
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_nombre"] = st.secrets["auth"].get("nombre", usuario)
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos.")
+
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+if not st.session_state["autenticado"]:
+    pantalla_login()
+    st.stop()
+
+# ─────────────────────────────────────────────
+# FUNCIÓN: ESCALONES DE SOPORTE
+# ─────────────────────────────────────────────
+def calcular_escalones(df_1y, precio_actual, piso_m, piso_anual, narrativa, cant, total_inv):
+    """
+    Calcula los mínimos reales de cada mes del año (de más reciente a más antiguo),
+    filtra solo los que están DEBAJO del precio actual (pisos ya rotos o en riesgo),
+    y los vincula con los 3 niveles de rescate.
+    Retorna lista de escalones con su nivel sugerido y estado de alerta.
+    """
+    hoy = pd.Timestamp.now(tz=df_1y.index.tz)
+    escalones_raw = []
+
+    # Recolectar mínimo de cada mes en el historial (hasta 12 meses atrás)
+    for i in range(1, 13):
+        mes  = (hoy.month - i - 1) % 12 + 1
+        anio = hoy.year if hoy.month - i > 0 else hoy.year - 1
+        # ajuste fino de año
+        offset = hoy.month - i
+        if offset <= 0:
+            anio = hoy.year - 1
+            mes  = 12 + offset
+        else:
+            anio = hoy.year
+            mes  = offset
+
+        bloque = df_1y[(df_1y.index.month == mes) & (df_1y.index.year == anio)]
+        if not bloque.empty:
+            low_mes  = float(bloque['Low'].min())
+            nombre_m = pd.Timestamp(year=anio, month=mes, day=1).strftime("%b %Y")
+            escalones_raw.append((low_mes, nombre_m))
+
+    # Eliminar duplicados y ordenar de mayor a menor
+    vistos = set()
+    escalones_uniq = []
+    for v, n in sorted(escalones_raw, reverse=True):
+        key = round(v, 2)
+        if key not in vistos:
+            vistos.add(key)
+            escalones_uniq.append((v, n))
+
+    # Solo los que están por DEBAJO del precio actual (soporte roto o en riesgo)
+    debajo = [(v, n) for v, n in escalones_uniq if v < precio_actual]
+
+    # Agregar piso anual al final si no está ya
+    if piso_anual < precio_actual and not any(abs(v - piso_anual) < 1.0 for v, _ in debajo):
+        debajo.append((piso_anual, "🔻 Piso Anual"))
+
+    # Tomar máximo 4 escalones más relevantes
+    debajo = debajo[:4]
+
+    # Vincular cada escalón con nivel de rescate
+    nivel_labels = [
+        ("Nivel 1 — Conservador (25%)", "#2ea043"),
+        ("Nivel 2 — Moderado (50%)",    "#d29922"),
+        ("Nivel 3 — Agresivo (100%)",   "#f85149"),
+        ("Zona Extrema / Stop Loss",    "#8b0000"),
+    ]
+
+    precio_promedio = total_inv / cant if cant > 0 else 0
+    meta_pct = narrativa["meta_pct"]
+
+    resultado = []
+    for idx, (precio_esc, nombre_m) in enumerate(debajo):
+        nivel_nombre, nivel_color = nivel_labels[idx] if idx < len(nivel_labels) else nivel_labels[-1]
+
+        # Calcular simulación si se entra en este escalón
+        pct_rescate = [0.25, 0.50, 1.00, 1.00][idx]
+        capital_extra   = total_inv * pct_rescate
+        nuevos_titulos  = capital_extra / precio_esc if precio_esc > 0 else 0
+        titulos_finales = cant + nuevos_titulos
+        inv_final       = total_inv + capital_extra
+        nuevo_promedio  = inv_final / titulos_finales if titulos_finales > 0 else 0
+        precio_meta     = nuevo_promedio * meta_pct
+        ganancia_meta   = (precio_meta - nuevo_promedio) * titulos_finales
+
+        # Estado de alerta
+        dist_pct = ((precio_actual - precio_esc) / precio_actual) * 100
+        if dist_pct <= 2:
+            alerta = "🔴 PRECIO EN ZONA — ¡Decidir ahora!"
+            estado = "activo"
+        elif dist_pct <= 6:
+            alerta = "🟡 CERCA — Preparar capital"
+            estado = "activo"
+        else:
+            alerta = f"🔵 A {dist_pct:.1f}% de distancia"
+            estado = "pendiente"
+
+        resultado.append({
+            "precio":         precio_esc,
+            "nombre_mes":     nombre_m,
+            "nivel_nombre":   nivel_nombre,
+            "nivel_color":    nivel_color,
+            "alerta":         alerta,
+            "estado":         estado,
+            "dist_pct":       dist_pct,
+            "capital_extra":  capital_extra,
+            "nuevo_promedio": nuevo_promedio,
+            "precio_meta":    precio_meta,
+            "ganancia_meta":  ganancia_meta,
+            "nuevos_titulos": nuevos_titulos,
+        })
+
+    return resultado
+
+# ─────────────────────────────────────────────
+# 4. DICCIONARIO LYNCH
 # ─────────────────────────────────────────────
 narrativas = {
     "🔄 Cíclica (Minería, Chips, Autos)": {
@@ -152,15 +324,31 @@ narrativas = {
 # ─────────────────────────────────────────────
 def limpiar_ticker(ticker_input):
     dicc = {
+        # Mexico
         "PEÑOLES": "PE&OLES.MX", "GMEXICO": "GMEXICOB.MX",
+        "FIBRAMQ": "FMTY.MX",    "WALMEX": "WALMEX.MX",
+        "AMXL": "AMXL.MX",       "FEMSAUBD": "FEMSAUBD.MX",
+        "NAFTRAC": "NAFTRAC.MX",
+        # Cripto
         "BTC": "BTC-USD", "ETH": "ETH-USD", "SOL": "SOL-USD",
-        "S&P 500": "VOO", "SP500": "VOO", "NAFTRAC": "NAFTRAC.MX",
-        "FIBRAMQ": "FMTY.MX", "WALMEX": "WALMEX.MX",
-        "AMXL": "AMXL.MX", "FEMSAUBD": "FEMSAUBD.MX"
+        # ETFs
+        "S&P 500": "VOO", "SP500": "VOO",
+        # Europa nombres comunes
+        "MONDI": "MNDI.L",   "ASML": "ASML.AS",  "ADIDAS": "ADS.DE",
+        "SAP": "SAP.DE",     "LVMH": "MC.PA",     "SIEMENS": "SIE.DE",
+        "NESTLE": "NESN.SW", "ROCHE": "ROG.SW",   "SHELL": "SHEL.L",
+        "VOLKSWAGEN": "VOW3.DE", "BMW": "BMW.DE",
     }
     t = ticker_input.upper().strip()
     if t in dicc:
         return dicc[t]
+    # Si ya trae sufijo de mercado lo devuelve tal cual
+    if "." in t:
+        return t
+    # Cripto con guion escrito manualmente
+    if "-USD" in t or "-EUR" in t:
+        return t
+    # Empresas mexicanas con diagonal
     if "/" in t:
         return t.replace("/", "") + ".MX"
     return t
@@ -305,14 +493,22 @@ def analizar_semaforo(df, precio_actual, info, categoria):
         except:
             pass
 
+    # ── ESCUDO DE VOLUMEN ────────────────────────
     vol_avg = df['Volume'].rolling(20).mean().iloc[-1]
     vol_hoy = df['Volume'].iloc[-1]
-    if vol_hoy > vol_avg * 1.5 and df['Close'].iloc[-1] > df['Close'].iloc[-2]:
-        puntos += 1
-        razones.append("✅ Volumen alto con precio subiendo — compradores activos")
+
+    if vol_hoy > vol_avg * 1.8 and df['Close'].iloc[-1] < df['Close'].iloc[-2]:
+        puntos -= 3
+        alertas.append("🚨 VOLUMEN DE VENTA EXTREMO — El piso actual no es confiable. Espera a que los vendedores se agoten.")
     elif vol_hoy > vol_avg * 1.5 and df['Close'].iloc[-1] < df['Close'].iloc[-2]:
         puntos -= 1
-        alertas.append("⚠️ Volumen alto con precio cayendo — vendedores activos")
+        alertas.append("⚠️ Volumen alto con precio cayendo — vendedores activos.")
+    elif vol_hoy > vol_avg * 1.5 and df['Close'].iloc[-1] > df['Close'].iloc[-2]:
+        puntos += 2
+        razones.append("✅ Rebote con volumen — El piso está aguantando. Señal de compra más confiable.")
+    elif vol_hoy > vol_avg * 1.0 and df['Close'].iloc[-1] > df['Close'].iloc[-2]:
+        puntos += 1
+        razones.append("✅ Volumen normal con precio subiendo — compradores activos.")
 
     if puntos >= 6:
         color = "verde"; emoji = "🟢"; decision = "INYECTAR CAPITAL"
@@ -405,13 +601,19 @@ if 'community_strategies' not in st.session_state:
 # ─────────────────────────────────────────────
 # 6. HEADER
 # ─────────────────────────────────────────────
-col_h1, col_h2 = st.columns([8, 2])
+col_h1, col_h2, col_h3 = st.columns([6, 2, 1])
 with col_h1:
+    nombre_usr = st.session_state.get("usuario_nombre", "")
     st.title("🧠 AI.lino")
-    st.markdown("### Simulador de Mercado · Análisis VIP · Comunidad de Estrategias")
+    st.markdown(f"### Simulador de Mercado · Análisis VIP · Comunidad de Estrategias &nbsp; <small style='color:#8b949e;'>Hola, {nombre_usr} 👋</small>", unsafe_allow_html=True)
 with col_h2:
     st.write("<br>", unsafe_allow_html=True)
     st.link_button("🎁 Apoyar el proyecto", "https://buymeacoffee.com/Hugo.lino", use_container_width=True)
+with col_h3:
+    st.write("<br>", unsafe_allow_html=True)
+    if st.button("🔒 Salir", use_container_width=True):
+        st.session_state["autenticado"] = False
+        st.rerun()
 
 st.markdown("---")
 
@@ -625,6 +827,40 @@ if "Comunidad" not in modo:
 
                     st.markdown("---")
 
+                    # ── ESCALONES DE SOPORTE ─────────────────────────
+                    piso_roto = precio_actual < piso_m
+                    st.markdown("## 🪜 Mapa de Escalones de Soporte")
+
+                    if piso_roto:
+                        st.error(f"⚠️ El precio **${precio_actual:,.2f}** rompió el Piso Mensual **${piso_m:,.2f}**. Aquí están los siguientes niveles reales de soporte hasta el piso anual.")
+                    else:
+                        st.info(f"✅ El Piso Mensual **${piso_m:,.2f}** aún se mantiene. Los escalones de abajo son tus zonas de alerta si se rompe.")
+
+                    escalones = calcular_escalones(df_1y, precio_actual, piso_m, piso_anual, narrativas[categoria], cant if cant > 0 else 1, total_inv if total_inv > 0 else precio_actual)
+
+                    if escalones:
+                        st.caption(f"📌 Escalones calculados con los mínimos reales de cada mes · Vinculados con la Sala de Simulación · Objetivo: **{narrativas[categoria]['nombre_meta']}**")
+                        for esc in escalones:
+                            css_class = "escalon-activo" if esc["estado"] == "activo" else "escalon-pendiente"
+                            st.markdown(f"""
+                            <div class="escalon-card {css_class}" style="border-left-color: {esc['nivel_color']};">
+                                <b style="color:{esc['nivel_color']};">{esc['nivel_nombre']}</b>
+                                &nbsp;·&nbsp; <b>Soporte: ${esc['precio']:,.2f}</b>
+                                &nbsp;·&nbsp; <small style="color:#8b949e;">Mínimo de {esc['nombre_mes']}</small><br>
+                                {esc['alerta']}<br>
+                                <small>
+                                💵 Si entras aquí: inyectar <b>${esc['capital_extra']:,.2f}</b>
+                                &nbsp;·&nbsp; Nuevo promedio: <b>${esc['nuevo_promedio']:,.2f}</b>
+                                &nbsp;·&nbsp; Meta {narrativas[categoria]['nombre_meta']}: <b>${esc['precio_meta']:,.2f}</b>
+                                &nbsp;→&nbsp; Ganancia estimada: <b>${esc['ganancia_meta']:,.2f}</b>
+                                </small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.warning("No hay suficiente historial mensual para calcular escalones.")
+
+                    st.markdown("---")
+
                     # ── MOTOR DE RESCATE ─────────────────────────────
                     if rendimiento < 0:
                         rescate = calcular_rescate(cant, total_inv, precio_actual, categoria, techo_y, piso_m)
@@ -674,6 +910,18 @@ if "Comunidad" not in modo:
                                     Ganancia neta: <b>${nivel['ganancia_en_meta']:,.2f}</b>
                                 </div>
                                 """, unsafe_allow_html=True)
+
+                            # ── ALERTA MA200 por nivel de rescate ────
+                            ma200_val = analisis.get('ma200')
+                            if ma200_val is not None:
+                                for nivel in rescate['niveles']:
+                                    if nivel['nuevo_promedio'] > ma200_val:
+                                        st.warning(
+                                            f"⚠️ **Atención en {nivel['nombre']}:** "
+                                            f"Tu nuevo promedio **${nivel['nuevo_promedio']:,.2f}** "
+                                            f"quedaría ARRIBA de la MA200 **${ma200_val:,.2f}**. "
+                                            f"La recuperación puede ser lenta y pesada — el precio tendrá esa resistencia encima."
+                                        )
 
                             st.warning(f"⚠️ **Consejo Lynch:** {rescate['narrativa']['consejo']}")
 
