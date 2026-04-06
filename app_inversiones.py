@@ -856,23 +856,28 @@ with st.sidebar:
                     except Exception:
                         pass
 
+                    ia_ok = False
                     if api_key:
-                        payload = _json.dumps({
-                            "model": "claude-sonnet-4-20250514",
-                            "max_tokens": 1200,
-                            "messages": [{"role": "user", "content": prompt_deep}]
-                        }).encode()
-                        req = _ur.Request(
-                            "https://api.anthropic.com/v1/messages", data=payload,
-                            headers={"Content-Type": "application/json",
-                                     "x-api-key": api_key,
-                                     "anthropic-version": "2023-06-01"}, method="POST"
-                        )
-                        with _ur.urlopen(req, timeout=30) as resp:
-                            analisis_ia = _json.loads(resp.read())["content"][0]["text"]
-                        st.session_state["sidebar_resultado_ia"] = analisis_ia
-                        st.session_state["sidebar_ticker_resultado"] = t_ia
-                    else:
+                        try:
+                            payload = _json.dumps({
+                                "model": "claude-sonnet-4-20250514",
+                                "max_tokens": 1200,
+                                "messages": [{"role": "user", "content": prompt_deep}]
+                            }).encode()
+                            req = _ur.Request(
+                                "https://api.anthropic.com/v1/messages", data=payload,
+                                headers={"Content-Type": "application/json",
+                                         "x-api-key": api_key,
+                                         "anthropic-version": "2023-06-01"}, method="POST"
+                            )
+                            with _ur.urlopen(req, timeout=30) as resp:
+                                analisis_ia = _json.loads(resp.read())["content"][0]["text"]
+                            st.session_state["sidebar_resultado_ia"] = analisis_ia
+                            st.session_state["sidebar_ticker_resultado"] = t_ia
+                            ia_ok = True
+                        except Exception:
+                            ia_ok = False  # Cae al fallback estático
+                    if not ia_ok:
                         # Sin API key: reporte estático inteligente
                         _rsi_txt = "sobrevendido - posible rebote" if _rsi < 35 else ("sobrecomprado - precaucion" if _rsi > 65 else "neutral")
                         _macd_txt = "positivo - presion compradora" if _macd > 0 else "negativo - presion vendedora"
