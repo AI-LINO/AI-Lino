@@ -752,30 +752,63 @@ with st.sidebar:
                 except: pass
 
                 if not _df.empty:
-                    _pc    = float(_df['Close'].iloc[-1])
-                    _ma50  = float(_df['Close'].rolling(50).mean().iloc[-1])
-                    _ma200 = float(_df['Close'].rolling(200).mean().iloc[-1]) if len(_df) >= 200 else None
-                    _techo = float(_df['High'].max())
-                    _piso  = float(_df['Low'].min())
+                    def _safe_float(val, fallback=None):
+                        """Convierte cualquier valor a float de forma segura."""
+                        try:
+                            import pandas as _pd2
+                            if hasattr(val, 'iloc'):
+                                val = val.iloc[-1]
+                            if val is None or (isinstance(val, float) and _np.isnan(val)):
+                                return fallback
+                            return float(val)
+                        except Exception:
+                            return fallback
+
+                    _pc    = _safe_float(_df['Close'].iloc[-1], 0)
+                    _ma50  = _safe_float(_df['Close'].rolling(50).mean().iloc[-1], _pc)
+                    _ma200 = _safe_float(_df['Close'].rolling(200).mean().iloc[-1]) if len(_df) >= 200 else None
+                    _techo = _safe_float(_df['High'].max(), _pc)
+                    _piso  = _safe_float(_df['Low'].min(), _pc)
                     _rsi_d = _df['Close'].diff()
                     _g     = _rsi_d.clip(lower=0).rolling(14).mean()
                     _l     = (-_rsi_d.clip(upper=0)).rolling(14).mean()
-                    _rsi   = float(100 - 100/(1 + _g/_l.replace(0,_np.nan))).iloc[-1] if not _l.empty else 50
-                    _vol_r = float(_df['Volume'].iloc[-1] / _df['Volume'].rolling(20).mean().iloc[-1])
-                    _macd  = float(_df['Close'].ewm(span=12,adjust=False).mean().iloc[-1] -
-                                   _df['Close'].ewm(span=26,adjust=False).mean().iloc[-1])
-                    _pe    = _info.get('trailingPE')
-                    _name  = _info.get('longName', t_ia)
-                    _sect  = _info.get('sector','N/D')
-                    _pais  = _info.get('country','N/D')
-                    _52wH  = _info.get('fiftyTwoWeekHigh', _techo)
-                    _52wL  = _info.get('fiftyTwoWeekLow', _piso)
-                    _mktcap = _info.get('marketCap')
-                    _div   = _info.get('dividendYield')
-                    _beta  = _info.get('beta')
-                    _rev_g = _info.get('revenueGrowth')
-                    _margin = _info.get('profitMargins')
-                    _deuda = _info.get('debtToEquity')
+                    try:
+                        _rsi_s = 100 - 100/(1 + _g/_l.replace(0,_np.nan))
+                        _rsi   = _safe_float(_rsi_s.dropna().iloc[-1], 50)
+                    except Exception:
+                        _rsi = 50
+                    _vol_mean = _df['Volume'].rolling(20).mean().iloc[-1]
+                    _vol_r = _safe_float(_df['Volume'].iloc[-1] / _vol_mean if _vol_mean > 0 else 1, 1.0)
+                    try:
+                        _macd = _safe_float(
+                            _df['Close'].ewm(span=12,adjust=False).mean().iloc[-1] -
+                            _df['Close'].ewm(span=26,adjust=False).mean().iloc[-1], 0)
+                    except Exception:
+                        _macd = 0
+                    # Info fundamental — safe extraction
+                    def _safe_info(key, fallback=None):
+                        val = _info.get(key, fallback)
+                        if val is None: return fallback
+                        try:
+                            f = float(val)
+                            return None if _np.isnan(f) else f
+                        except Exception:
+                            return val if isinstance(val, str) else fallback
+                    _pe     = _safe_info('trailingPE')
+                    _name   = _info.get('longName', t_ia)
+                    _sect   = _info.get('sector', 'N/D')
+                    _pais   = _info.get('country', 'N/D')
+                    _52wH   = _safe_info('fiftyTwoWeekHigh', _techo)
+                    _52wL   = _safe_info('fiftyTwoWeekLow', _piso)
+                    _mktcap = _safe_info('marketCap')
+                    _div    = _safe_info('dividendYield')
+                    _beta   = _safe_info('beta')
+                    _rev_g  = _safe_info('revenueGrowth')
+                    _margin = _safe_info('profitMargins')
+                    _deuda  = _safe_info('debtToEquity')
+                    # Proteger divisiones por cero
+                    if not _52wH or _52wH == 0: _52wH = _techo or 1
+                    if not _52wL or _52wL == 0: _52wL = _piso or 1
 
                     _ma200_str = str(round(_ma200,2)) if _ma200 else "N/D"
                     _ma200_pos = "SOBRE" if _ma200 and _pc > _ma200 else ("BAJO" if _ma200 else "SIN DATO")
@@ -816,7 +849,13 @@ with st.sidebar:
                         "Maximo 500 palabras. Directo, sin relleno."
                     )
 
-                    api_key = st.secrets.get("anthropic", {}).get("api_key", "")
+                    # Obtener API key de forma segura
+                    api_key = ""
+                    try:
+                        api_key = st.secrets["anthropic"]["api_key"]
+                    except Exception:
+                        pass
+
                     if api_key:
                         payload = _json.dumps({
                             "model": "claude-sonnet-4-20250514",
@@ -834,12 +873,34 @@ with st.sidebar:
                         st.session_state["sidebar_resultado_ia"] = analisis_ia
                         st.session_state["sidebar_ticker_resultado"] = t_ia
                     else:
-                        st.session_state["sidebar_resultado_ia"] = (
-                            "Configura tu API key de Anthropic en Streamlit Secrets para activar la IA real. "
-                            f"Resumen basico de {_name}: "
-                            f"Precio ${_pc:,.2f} | RSI {_rsi:.1f} | Tendencia {_tend_str} vs MA50. "
-                            f"{'Sobre MA200 - estructura de largo plazo positiva.' if _ma200 and _pc > _ma200 else 'Bajo MA200 - precaucion en largo plazo.'}"
+                        # Sin API key: reporte estático inteligente
+                        _rsi_txt = "sobrevendido - posible rebote" if _rsi < 35 else ("sobrecomprado - precaucion" if _rsi > 65 else "neutral")
+                        _macd_txt = "positivo - presion compradora" if _macd > 0 else "negativo - presion vendedora"
+                        _ma200_txt2 = f"${_ma200:,.2f}" if _ma200 else "no disponible"
+                        _vol_txt2 = "elevado - movimiento institucional posible" if _vol_r > 1.3 else "normal"
+                        reporte_estatico = (
+                            f"PANORAMA ACTUAL\n"
+                            f"{_name} ({t_ia}) cotiza en ${_pc:,.2f}, en tendencia {_tend_str} de corto plazo. "
+                            f"Se encuentra {_caida_str} abajo de su maximo de 52 semanas y {_rebote_str} arriba del minimo. "
+                            f"Sector: {_sect} | Pais: {_pais}\n\n"
+                            f"RADIOGRAFIA TECNICA\n"
+                            f"RSI en {_rsi:.1f} - {_rsi_txt}. MACD {_macd_txt}. "
+                            f"Precio {'sobre' if _pc > _ma50 else 'bajo'} MA50 (${_ma50:,.2f}). "
+                            f"MA200: {_ma200_txt2} - {'estructura alcista de largo plazo.' if _ma200 and _pc > _ma200 else 'tendencia bajista de largo plazo.'} "
+                            f"Volumen {_vol_txt2}.\n\n"
+                            f"FUNDAMENTOS Y SALUD FINANCIERA\n"
+                            f"P/E: {_pe_str} | Margen neto: {_margin_str} | Crecimiento ingresos: {_rev_str} | "
+                            f"Deuda/Capital: {_deuda_str} | Cap. mercado: {_mktcap_str} | Dividendo: {_div_str}.\n\n"
+                            f"RIESGOS REALES\n"
+                            f"1. Si rompe el piso de 52 semanas (${_52wL:,.2f}), la caida puede acelerarse. "
+                            f"2. Volumen {_vol_str} indica {'presion institucional activa.' if _vol_r > 1.5 else 'movimiento moderado sin confirmacion fuerte.'} "
+                            f"3. {'Deuda elevada puede ser riesgo si suben tasas.' if _deuda and float(_deuda) > 100 else 'Estructura de deuda aparentemente manejable.'}\n\n"
+                            f"VEREDICTO Y PLAN DE ACCION\n"
+                            f"{'Esperar confirmacion sobre MA50 antes de entrar.' if _pc < _ma50 else 'Tendencia de corto plazo favorable, monitorear soporte en MA50.'} "
+                            f"Stop loss logico: ${_52wL * 1.03:,.2f} (3% sobre minimo 52s). "
+                            f"Para activar IA real: agrega tu API key de Anthropic en Streamlit > Settings > Secrets."
                         )
+                        st.session_state["sidebar_resultado_ia"] = reporte_estatico
                         st.session_state["sidebar_ticker_resultado"] = t_ia
                 else:
                     st.session_state["sidebar_resultado_ia"] = f"No se encontraron datos para {t_ia}. Verifica el simbolo."
@@ -855,8 +916,13 @@ with st.sidebar:
         with st.expander(f"📊 Análisis IA: {t_res}", expanded=True):
             resultado_txt = st.session_state["sidebar_resultado_ia"]
             st.markdown(f"""
-            <div style="font-size:0.82rem; line-height:1.7; color:#e6edf3;
-                 white-space:pre-line;">{resultado_txt}</div>
+            <div style="font-size:0.85rem; line-height:1.8;
+                 background:linear-gradient(135deg,#0d1117,#161b22);
+                 color:#e6edf3 !important;
+                 border-radius:10px; padding:16px; margin-top:8px;
+                 white-space:pre-line; border-left:4px solid #58a6ff;">
+            {resultado_txt}
+            </div>
             """, unsafe_allow_html=True)
 
             # Bocina
