@@ -876,65 +876,83 @@ if "Comunidad" not in modo:
 
                         if escalones:
                             for esc in escalones:
-                                # Verificar si este nivel cae en trampa MA200
                                 es_trampa = (ma200_val is not None and esc["nuevo_promedio"] > ma200_val)
 
-                                if es_trampa:
-                                    borde_color = "#8b0000"
-                                    badge_trampa = f'<span style="background:#8b0000; color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem; font-weight:700;">⚠️ TRAMPA MA200</span>'
-                                    bg_card = "background: linear-gradient(135deg, #2d0a0a, #1c1010);"
-                                else:
-                                    borde_color = esc["nivel_color"]
-                                    badge_trampa = ""
-                                    bg_card = "background: #1c2128;"
+                                # Colores y estilos según trampa o viable
+                                borde_color = "#8b0000" if es_trampa else esc["nivel_color"]
+                                bg_gradient = "linear-gradient(135deg,#2d0a0a,#1c1010)" if es_trampa else "#1c2128"
 
-                                # Badge de alerta de precio
+                                # Badge urgencia
                                 if "PRECIO EN ZONA" in esc["alerta"]:
-                                    badge_alerta = f'<span style="background:#f85149; color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem;">🔴 DECIDIR AHORA</span>'
+                                    urgencia = "🔴 DECIDIR AHORA"
+                                    urgencia_bg = "#f85149"
                                 elif "CERCA" in esc["alerta"]:
-                                    badge_alerta = f'<span style="background:#d29922; color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem;">🟡 PREPARAR CAPITAL</span>'
+                                    urgencia = "🟡 PREPARAR CAPITAL"
+                                    urgencia_bg = "#d29922"
                                 else:
-                                    badge_alerta = f'<span style="background:#1f3a5c; color:#58a6ff; padding:2px 8px; border-radius:6px; font-size:0.8rem;">🔵 {esc["alerta"].split("A ")[1] if "A " in esc["alerta"] else "En espera"}</span>'
+                                    urgencia = f"🔵 {esc['dist_pct']:.1f}% de distancia"
+                                    urgencia_bg = "#1f3a5c"
 
-                                # Veredicto del nivel
+                                # Veredicto texto plano (sin HTML anidado)
                                 if es_trampa:
-                                    veredicto_html = f"""
-                                    <div style="margin-top:8px; padding:8px 12px; background:#3d0000; border-radius:8px; border:1px solid #8b0000;">
-                                        ⛔ <b>NIVEL NO RECOMENDADO:</b> Tu nuevo promedio <b>${esc['nuevo_promedio']:,.2f}</b>
-                                        quedaría <b>ARRIBA de la MA200 (${ma200_val:,.2f})</b>.<br>
-                                        <span style="color:#ff9999;">El precio chocará con esa resistencia antes de que puedas salir en tablas. Espera un escalón más abajo.</span>
-                                    </div>"""
+                                    veredicto_icono = "⛔"
+                                    veredicto_titulo = "NIVEL NO RECOMENDADO — TRAMPA MA200"
+                                    veredicto_bg = "#3d0000"
+                                    veredicto_borde = "#8b0000"
+                                    veredicto_texto = (
+                                        f"Tu nuevo promedio ${esc['nuevo_promedio']:,.2f} quedaría "
+                                        f"ARRIBA de la MA200 ${ma200_val:,.2f}. "
+                                        f"El precio chocará con esa resistencia antes de que puedas salir en tablas. "
+                                        f"Espera un escalón más abajo."
+                                    )
                                 else:
-                                    veredicto_html = f"""
-                                    <div style="margin-top:8px; padding:8px 12px; background:#0d2b1a; border-radius:8px; border:1px solid #2ea043;">
-                                        ✅ <b>NIVEL VIABLE:</b> Tu nuevo promedio <b>${esc['nuevo_promedio']:,.2f}</b>
-                                        {f"quedaría BAJO la MA200 (${ma200_val:,.2f}) — camino libre hacia el objetivo." if ma200_val else "— sin resistencia MA200 detectada."}
-                                    </div>"""
+                                    veredicto_icono = "✅"
+                                    veredicto_titulo = "NIVEL VIABLE"
+                                    veredicto_bg = "#0d2b1a"
+                                    veredicto_borde = "#2ea043"
+                                    if ma200_val:
+                                        veredicto_texto = (
+                                            f"Tu nuevo promedio ${esc['nuevo_promedio']:,.2f} quedaría "
+                                            f"BAJO la MA200 ${ma200_val:,.2f} — camino libre hacia el objetivo."
+                                        )
+                                    else:
+                                        veredicto_texto = f"Tu nuevo promedio ${esc['nuevo_promedio']:,.2f} — sin resistencia MA200 detectada."
 
-                                st.markdown(f"""
-                                <div class="escalon-card" style="{bg_card} border-left: 6px solid {borde_color}; margin-bottom:14px;">
-                                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
+                                reduccion_pct = ((esc['nuevo_promedio'] / precio_promedio) - 1) * 100
+
+                                # Render: cabecera de la tarjeta
+                                st.markdown(
+                                    f"""<div style="background:{bg_gradient}; border-left:6px solid {borde_color};
+                                    border-radius:12px; padding:16px 20px; margin-bottom:4px;">
+                                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
                                         <b style="color:{borde_color}; font-size:1rem;">{esc['nivel_nombre']}</b>
-                                        {badge_alerta}
-                                        {badge_trampa}
+                                        <span style="background:{urgencia_bg}; color:white; padding:2px 10px;
+                                        border-radius:6px; font-size:0.8rem; font-weight:700;">{urgencia}</span>
                                     </div>
-                                    <div style="color:#8b949e; font-size:0.85rem; margin-bottom:8px;">
-                                        📍 Soporte histórico: <b style="color:#e6edf3;">${esc['precio']:,.2f}</b>
+                                    <div style="color:#8b949e; font-size:0.85rem; margin-bottom:10px;">
+                                        📍 Soporte: <b style="color:#e6edf3;">${esc['precio']:,.2f}</b>
                                         &nbsp;·&nbsp; Mínimo de <b style="color:#e6edf3;">{esc['nombre_mes']}</b>
                                         &nbsp;·&nbsp; A <b style="color:#e6edf3;">{esc['dist_pct']:.1f}%</b> del precio actual
                                     </div>
-                                    <div style="font-size:0.92rem; line-height:1.9;">
+                                    <div style="font-size:0.92rem; line-height:2.0; color:#e6edf3;">
                                         💵 Capital a inyectar: <b>${esc['capital_extra']:,.2f}</b>
                                         &nbsp;·&nbsp; Títulos nuevos: <b>{esc['nuevos_titulos']:.4f}</b><br>
                                         📊 Nuevo promedio: <b>${esc['nuevo_promedio']:,.2f}</b>
-                                        &nbsp;·&nbsp; Reducción vs hoy: <b>{((esc['nuevo_promedio']/precio_promedio)-1)*100:.1f}%</b><br>
+                                        &nbsp;·&nbsp; Cambio vs hoy: <b>{reduccion_pct:.1f}%</b><br>
                                         🎯 Meta {narrativa_sc['nombre_meta']}: <b>${esc['precio_meta']:,.2f}</b>
                                         &nbsp;→&nbsp; Ganancia estimada: <b>${esc['ganancia_meta']:,.2f}</b>
                                     </div>
-                                    {veredicto_html}
-                                </div>
-                                """, unsafe_allow_html=True)
-                        else:
+                                    </div>""",
+                                    unsafe_allow_html=True
+                                )
+                                # Render: veredicto como bloque separado
+                                st.markdown(
+                                    f"""<div style="background:{veredicto_bg}; border:1px solid {veredicto_borde};
+                                    border-radius:8px; padding:10px 16px; margin-bottom:16px; font-size:0.9rem; color:#e6edf3;">
+                                    {veredicto_icono} <b>{veredicto_titulo}:</b> {veredicto_texto}
+                                    </div>""",
+                                    unsafe_allow_html=True
+                                )
                             st.warning("No hay suficiente historial mensual para calcular escalones.")
 
                         st.markdown("---")
