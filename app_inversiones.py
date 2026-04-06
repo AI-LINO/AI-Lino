@@ -988,24 +988,18 @@ if "Comunidad" not in modo:
                         tv_symbol = ticker_limpio.replace("-", "")
                     else:
                         tv_symbol = ticker_limpio  # NASDAQ/NYSE ya funcionan directo
+                    # TradingView iframe — funciona con TODOS los mercados
                     tv_widget = f"""
-                    <div class="tradingview-widget-container">
-                    <div id="tv_chart"></div>
-                    <script src="https://s3.tradingview.com/tv.js"></script>
-                    <script>
-                    new TradingView.widget({{
-                        "width": "100%", "height": 420,
-                        "symbol": "{tv_symbol}",
-                        "interval": "D",
-                        "theme": "dark",
-                        "style": "1",
-                        "locale": "es",
-                        "toolbar_bg": "#161b22",
-                        "hide_side_toolbar": false,
-                        "container_id": "tv_chart"
-                    }});
-                    </script></div>"""
-                    components.html(tv_widget, height=430)
+                    <div style="height:430px; width:100%;">
+                    <iframe
+                        src="https://www.tradingview.com/widgetembed/?symbol={tv_symbol}&interval=D&theme=dark&style=1&locale=es&toolbar_bg=%23161b22&hide_side_toolbar=0&allow_symbol_change=1&saveimage=0&calendar=0&hotlist=0&details=1&news=0&studies=[]&show_popup_button=1&popup_width=1000&popup_height=650"
+                        style="width:100%; height:430px; border:none; border-radius:12px;"
+                        allowtransparency="true"
+                        scrolling="no"
+                        allowfullscreen="">
+                    </iframe>
+                    </div>"""
+                    components.html(tv_widget, height=440)
 
                     st.markdown("---")
 
@@ -1213,108 +1207,153 @@ if "Comunidad" not in modo:
                 st.caption(f"Generado con los datos actuales de {nombre_empresa} · {ticker_limpio} · Sector: {sector}")
 
                 # ═══════════════════════════════════════════════
-                # REPORTE IA REAL — Generado por Claude API
+                # REPORTE AI.lino — IA Real + fallback estático
                 # ═══════════════════════════════════════════════
                 st.markdown("---")
-                st.markdown("## 🤖 Reporte AI.lino — Análisis con Inteligencia Artificial")
-                st.caption(f"Generado por IA en tiempo real para {nombre_empresa} · {ticker_limpio} · Sector: {sector}")
+                st.markdown("## 📰 Reporte AI.lino — Análisis Situacional")
+                st.caption(f"Generado para {nombre_empresa} · {ticker_limpio} · Sector: {sector}")
 
-                # Construir prompt con todos los datos reales
-                caida_anual_pct = ((precio_actual / techo_y) - 1) * 100
+                # Datos del reporte
+                caida_anual_pct  = ((precio_actual / techo_y) - 1) * 100
                 rebote_anual_pct = ((precio_actual / piso_anual) - 1) * 100
-                macd_val_r = df_1y['Close'].ewm(span=12,adjust=False).mean().iloc[-1] - df_1y['Close'].ewm(span=26,adjust=False).mean().iloc[-1]
-                vol_ratio = df_1y['Volume'].iloc[-1] / df_1y['Volume'].rolling(20).mean().iloc[-1]
+                macd_val_r = (df_1y['Close'].ewm(span=12,adjust=False).mean().iloc[-1]
+                              - df_1y['Close'].ewm(span=26,adjust=False).mean().iloc[-1])
+                vol_ratio  = df_1y['Volume'].iloc[-1] / df_1y['Volume'].rolling(20).mean().iloc[-1]
+                tend_r     = "alcista" if precio_actual > analisis['ma50'] else "bajista"
+                ma200_pos_r = ("por encima de" if analisis['ma200'] and precio_actual > analisis['ma200']
+                               else "por debajo de" if analisis['ma200'] else "sin dato de")
+                estado_hmm_r = estado_pro if 'estado_pro' in locals() else "LATERAL"
 
-                prompt_ia = f"""Eres un analista financiero senior especializado en mercados de México, EE.UU. y Europa. 
-Escribe un reporte profesional pero accesible sobre esta acción, como si se lo explicaras a un inversionista inteligente pero no experto. 
-Usa un tono humano, directo y con criterio propio. NO uses frases genéricas ni repetitivas. Sé específico con los números.
-
-DATOS ACTUALES DE {nombre_empresa} ({ticker_limpio}):
-- Precio actual: ${precio_actual:,.2f}
-- Sector: {sector}
-- RSI 14 días: {analisis['rsi']:.1f}
-- MA50: ${analisis['ma50']:,.2f} | Precio {'SOBRE' if precio_actual > analisis['ma50'] else 'BAJO'} la MA50
-- MA200: ${analisis['ma200']:,.2f if analisis['ma200'] else 'N/D'} | Precio {'SOBRE' if analisis['ma200'] and precio_actual > analisis['ma200'] else 'BAJO' if analisis['ma200'] else 'SIN DATO'} la MA200
-- Piso mensual: ${piso_m:,.2f} | Piso anual: ${piso_anual:,.2f} | Techo anual: ${techo_y:,.2f}
-- Distancia al techo: {abs(caida_anual_pct):.1f}% | Distancia al piso: {rebote_anual_pct:.1f}%
-- Bollinger Superior: ${analisis['bb_up']:,.2f} | Inferior: ${analisis['bb_low']:,.2f}
-- MACD: {'positivo' if macd_val_r > 0 else 'negativo'} ({macd_val_r:,.2f})
-- Volumen relativo: {vol_ratio:.2f}x del promedio
-- P/E Ratio: {f"{analisis['pe_ratio']:.1f}" if analisis['pe_ratio'] else 'No disponible'}
-- EMA Mensual 20D: ${ema_mensual:,.2f}
-- Semaforo AI.lino: {analisis['decision']} (score: {analisis['puntos']:+d} puntos)
-- Estado Motor Pro: {estado_pro if 'estado_pro' in locals() else 'LATERAL'} | Rebote confirmado: {'SI' if rebote_pro else 'NO'}
-
-Escribe el reporte en español con 4 secciones claramente separadas:
-1. SITUACION ACTUAL: Qué está pasando con esta acción hoy, en lenguaje claro.
-2. LO QUE DICEN LOS INDICADORES: Interpreta los números de forma humana, no técnica.
-3. EL RIESGO REAL: Qué puede salir mal y cuánto puede bajar todavía.
-4. CONCLUSION Y ACCION: Qué haría un inversor inteligente en este momento.
-
-Máximo 350 palabras. Sin asteriscos ni markdown. Habla directo."""
-
-                with st.spinner("La IA está analizando la acción..."):
-                    try:
-                        import urllib.request
-                        import json as json_lib
-
-                        payload = json_lib.dumps({
-                            "model": "claude-sonnet-4-20250514",
-                            "max_tokens": 1000,
-                            "messages": [{"role": "user", "content": prompt_ia}]
-                        }).encode("utf-8")
-
-                        req = urllib.request.Request(
-                            "https://api.anthropic.com/v1/messages",
-                            data=payload,
-                            headers={
-                                "Content-Type": "application/json",
-                                "anthropic-version": "2023-06-01"
-                            },
-                            method="POST"
+                # Intentar IA real (Claude API) si hay key configurada
+                reporte_txt = None
+                try:
+                    api_key = st.secrets.get("anthropic", {}).get("api_key", "")
+                    if api_key:
+                        import urllib.request, json as _json
+                        prompt_ia = (
+                            f"Eres un analista financiero senior de mercados Mexico, EE.UU. y Europa. "
+                            f"Escribe un reporte profesional pero humano sobre {nombre_empresa} ({ticker_limpio}). "
+                            f"Tono directo, con criterio propio, sin frases genericas. Especifico con numeros. "
+                            f"Datos: precio {precio_actual:.2f}, RSI {analisis['rsi']:.1f}, "
+                            f"MA50 {analisis['ma50']:.2f}, MA200 {analisis['ma200']:.2f if analisis['ma200'] else 'N/D'}, "
+                            f"tendencia {tend_r}, piso mensual {piso_m:.2f}, piso anual {piso_anual:.2f}, "
+                            f"techo {techo_y:.2f}, distancia al techo {abs(caida_anual_pct):.1f}%, "
+                            f"MACD {'positivo' if macd_val_r > 0 else 'negativo'}, volumen {vol_ratio:.2f}x promedio, "
+                            f"P/E {analisis['pe_ratio']:.1f if analisis['pe_ratio'] else 'N/D'}, "
+                            f"semaforo: {analisis['decision']} score {analisis['puntos']:+d} puntos, "
+                            f"estado motor: {estado_hmm_r}, rebote confirmado: {'SI' if rebote_pro else 'NO'}. "
+                            f"4 secciones: 1.SITUACION ACTUAL 2.LO QUE DICEN LOS INDICADORES "
+                            f"3.EL RIESGO REAL 4.CONCLUSION Y ACCION. Max 350 palabras. Sin markdown."
                         )
-                        with urllib.request.urlopen(req, timeout=30) as resp:
-                            resultado = json_lib.loads(resp.read().decode())
-                            reporte_ia = resultado["content"][0]["text"]
+                        payload = _json.dumps({
+                            "model": "claude-sonnet-4-20250514",
+                            "max_tokens": 800,
+                            "messages": [{"role": "user", "content": prompt_ia}]
+                        }).encode()
+                        req = urllib.request.Request(
+                            "https://api.anthropic.com/v1/messages", data=payload,
+                            headers={"Content-Type": "application/json",
+                                     "x-api-key": api_key,
+                                     "anthropic-version": "2023-06-01"}, method="POST"
+                        )
+                        with urllib.request.urlopen(req, timeout=25) as resp:
+                            reporte_txt = _json.loads(resp.read())["content"][0]["text"]
+                except Exception:
+                    reporte_txt = None
 
-                        # Renderizar reporte IA
-                        st.markdown(f"""
-                        <div style="background:linear-gradient(135deg,#0d1117,#161b22);
-                             border:1px solid #30363d; border-radius:16px;
-                             padding:28px 32px; line-height:1.9; color:#e6edf3;
-                             font-size:1rem; white-space:pre-line;">
-                        {reporte_ia}
-                        </div>
-                        """, unsafe_allow_html=True)
+                # Fallback: reporte estático si no hay IA
+                if not reporte_txt:
+                    rsi_desc_r = ("en zona de sobreventa — posible oportunidad" if analisis['rsi'] < 35
+                                  else "en sobrecompra — precaución" if analisis['rsi'] > 65
+                                  else "en zona neutral")
+                    bb_pos_r = ("bajo la banda inferior — zona de rebote potencial"
+                                if precio_actual < analisis['bb_low']
+                                else "sobre la banda superior — sobreextendido"
+                                if precio_actual > analisis['bb_up'] else "dentro de las bandas Bollinger")
+                    macd_dir_r = "positivo, confirmando presión compradora" if macd_val_r > 0 else "negativo, sugiriendo presión vendedora"
+                    pe_desc_r = (f"P/E de {analisis['pe_ratio']:.1f}x — " +
+                                 ("valuación atractiva." if analisis['pe_ratio'] < 15
+                                  else "valuación razonable." if analisis['pe_ratio'] < 30
+                                  else "valuación elevada.")) if analisis['pe_ratio'] else "P/E no disponible en Yahoo Finance."
 
-                        # Botón de voz
-                        reporte_js = reporte_ia.replace("'", " ").replace('"', " ").replace("\n", " ")
-                        components.html(f"""
-                        <div style="text-align:right; margin-top:8px;">
-                            <button onclick="leerReporteIA()" title="Escuchar reporte"
-                                style="background:#30363d; border:1px solid #58a6ff; border-radius:8px;
-                                padding:8px 18px; color:#58a6ff; font-size:0.9rem; cursor:pointer;">
-                                🔊 Escuchar reporte
-                            </button>
-                        </div>
-                        <script>
-                        function leerReporteIA() {{
-                            if ('speechSynthesis' in window) {{
-                                window.speechSynthesis.cancel();
-                                var u = new SpeechSynthesisUtterance(`{reporte_js[:1500]}`);
-                                u.lang = 'es-MX'; u.rate = 0.92; u.pitch = 1.0;
-                                var voices = window.speechSynthesis.getVoices();
-                                var esp = voices.find(v => v.lang && v.lang.startsWith('es'));
-                                if (esp) u.voice = esp;
-                                window.speechSynthesis.speak(u);
-                            }}
-                        }}
-                        window.speechSynthesis.getVoices();
-                        </script>
-                        """, height=60)
+                    if analisis['color'] == 'verde':
+                        conclusion_r = (f"{nombre_empresa} presenta configuración técnica favorable. "
+                                        f"Soporte mensual en ${piso_m:,.2f} y anual en ${piso_anual:,.2f}. "
+                                        f"Una ruptura sostenida sobre la MA200 ${analisis['ma200']:,.2f if analisis['ma200'] else 0:.2f} confirmaría continuación alcista.")
+                    elif analisis['color'] == 'rojo':
+                        conclusion_r = (f"{nombre_empresa} muestra señales de debilidad. "
+                                        f"Riesgo de extensión hacia el piso anual ${piso_anual:,.2f}. "
+                                        f"No agregar posiciones hasta estabilización sobre MA50 ${analisis['ma50']:,.2f}.")
+                    else:
+                        conclusion_r = (f"{nombre_empresa} en zona de decisión. "
+                                        f"Soporte más cercano: ${piso_m:,.2f} (piso mensual). "
+                                        f"Catalizador de entrada: cierre sobre MA50 ${analisis['ma50']:,.2f} con volumen.")
 
-                    except Exception as e_ia:
-                        st.warning(f"IA no disponible en este momento: {e_ia}. Verifica que el API key de Anthropic esté configurado en secrets.toml")
+                    reporte_txt = (
+                        "SITUACION ACTUAL\n"
+                        f"{nombre_empresa} ({ticker_limpio}) cotiza en ${precio_actual:,.2f}, "
+                        f"en tendencia {tend_r} de corto plazo, operando {ma200_pos_r} su MA200. "
+                        f"Respecto a su rango anual, se encuentra {abs(caida_anual_pct):.1f}% abajo del techo "
+                        f"y {rebote_anual_pct:.1f}% arriba del piso.\n\n"
+                        "LO QUE DICEN LOS INDICADORES\n"
+                        f"RSI en {analisis['rsi']:.1f} - {rsi_desc_r}. "
+                        f"Precio {bb_pos_r}. MACD {macd_dir_r}. "
+                        f"Volumen reciente: {vol_ratio:.2f}x el promedio de 20 dias. {pe_desc_r}\n\n"
+                        "EL RIESGO REAL\n"
+                        f"Semaforo AI.lino: {analisis['decision']} (score {analisis['puntos']:+d} pts). "
+                        f"Motor Pro clasifica estado como {estado_hmm_r}. "
+                        f"{'Rebote confirmado por volumen.' if rebote_pro else 'Sin confirmacion de rebote aun.'} "
+                        f"Stop Loss sugerido: ${piso_m * 0.97:,.2f} (3% bajo piso mensual).\n\n"
+                        "CONCLUSION Y ACCION\n"
+                        f"{conclusion_r}"
+                    )
+
+                # Renderizar reporte
+                st.markdown(f"""
+                <div style="background:linear-gradient(135deg,#0d1117,#161b22);
+                     border:1px solid #30363d; border-radius:16px;
+                     padding:28px 32px; line-height:1.9; color:#e6edf3;
+                     font-size:1rem; white-space:pre-line;">{reporte_txt}</div>
+                """, unsafe_allow_html=True)
+
+                # Bocina — leer reporte completo
+                reporte_voz = reporte_txt.replace("'", " ").replace('"', " ").replace("$", " dolares ").replace("\n", ". ")
+                reporte_voz_safe = reporte_voz[:1800]
+                components.html(f"""
+                <div style="text-align:right; margin-top:8px;">
+                    <button onclick="leerReporteAI()" title="Escuchar reporte completo"
+                        style="background:#161b22; border:1px solid #58a6ff; border-radius:8px;
+                        padding:10px 20px; color:#58a6ff; font-size:0.95rem; cursor:pointer;
+                        transition:all 0.2s;">
+                        🔊 Escuchar reporte completo
+                    </button>
+                </div>
+                <script>
+                function leerReporteAI() {{
+                    if (!('speechSynthesis' in window)) {{
+                        alert('Tu navegador no soporta sintesis de voz.');
+                        return;
+                    }}
+                    window.speechSynthesis.cancel();
+                    var texto = `{reporte_voz_safe}`;
+                    var u = new SpeechSynthesisUtterance(texto);
+                    u.lang = 'es-MX';
+                    u.rate = 0.92;
+                    u.pitch = 1.0;
+                    function setVoice() {{
+                        var voices = window.speechSynthesis.getVoices();
+                        var esp = voices.find(function(v) {{ return v.lang && v.lang.startsWith('es'); }});
+                        if (esp) u.voice = esp;
+                        window.speechSynthesis.speak(u);
+                    }}
+                    if (window.speechSynthesis.getVoices().length > 0) {{
+                        setVoice();
+                    }} else {{
+                        window.speechSynthesis.onvoiceschanged = setVoice;
+                    }}
+                }}
+                </script>
+                """, height=65)
 
             except Exception as e:
                 st.error(f"⚠️ Error inesperado: {e}")
