@@ -962,16 +962,28 @@ if "Comunidad" not in modo:
                         base = ticker_limpio.replace(".MX", "")
                         # Acciones con serie: GMEXICOB -> GMEXICO/B, AMXL -> AMX/L, etc.
                         series_map = {
-                            "GMEXICOB": "GMEXICO/B",
-                            "AMXL":     "AMX/L",
-                            "BIMBOA":   "BIMBO/A",
-                            "FEMSAUBD": "FEMSA/UBD",
-                            "CEMEXCPO": "CEMEX/CPO",
-                            "GFNORTEO": "GFNORTE/O",
-                            "WALMEX":   "WALMEX",
-                            "NAFTRAC":  "NAFTRAC",
+                            "GMEXICOB":  "GMEXICO%2FB",
+                            "AMXL":      "AMX%2FL",
+                            "BIMBOA":    "BIMBO%2FA",
+                            "FEMSAUBD":  "FEMSA%2FUBD",
+                            "CEMEXCPO":  "CEMEX%2FCPO",
+                            "GFNORTEO":  "GFNORTE%2FO",
+                            "WALMEX":    "WALMEX",
+                            "NAFTRAC":   "NAFTRAC",
+                            "PE&OLES":   "PE%26OLES",
+                            "PEOLES":    "PE%26OLES",
+                            "ALSEA":     "ALSEA",
+                            "LIVEPOLC1": "LIVEPOL%2FC-1",
+                            "GCARSOA1":  "GCARSO%2FA1",
+                            "KIMBERA":   "KIMBER%2FA",
+                            "TLEVICPO":  "TLEVISA%2FCPO",
+                            "GRUMAB":    "GRUMA%2FB",
+                            "PINFRA":    "PINFRA",
+                            "OMAB":      "OMA%2FB",
                         }
-                        tv_symbol = f"BMV:{series_map.get(base, base)}"
+                        # URL-encode el símbolo para el iframe
+                        base_tv = series_map.get(base, base.replace("&", "%26").replace("/", "%2F"))
+                        tv_symbol = f"BMV:{base_tv}"
                     elif ticker_limpio.endswith(".L"):
                         base = ticker_limpio.replace(".L", "")
                         tv_symbol = f"LSE:{base}"
@@ -992,7 +1004,7 @@ if "Comunidad" not in modo:
                     tv_widget = f"""
                     <div style="height:430px; width:100%;">
                     <iframe
-                        src="https://www.tradingview.com/widgetembed/?symbol={tv_symbol}&interval=D&theme=dark&style=1&locale=es&toolbar_bg=%23161b22&hide_side_toolbar=0&allow_symbol_change=1&saveimage=0&calendar=0&hotlist=0&details=1&news=0&studies=[]&show_popup_button=1&popup_width=1000&popup_height=650"
+                        src="https://www.tradingview.com/widgetembed/?symbol={tv_symbol}&interval=D&theme=dark&style=1&locale=es&toolbar_bg=%23161b22&hide_side_toolbar=0&allow_symbol_change=1&saveimage=0&calendar=0&hotlist=0&details=1&news=0&studies=%5B%5D&show_popup_button=1&popup_width=1000&popup_height=650"
                         style="width:100%; height:430px; border:none; border-radius:12px;"
                         allowtransparency="true"
                         scrolling="no"
@@ -1235,7 +1247,7 @@ if "Comunidad" not in modo:
                             f"Escribe un reporte profesional pero humano sobre {nombre_empresa} ({ticker_limpio}). "
                             f"Tono directo, con criterio propio, sin frases genericas. Especifico con numeros. "
                             f"Datos: precio {precio_actual:.2f}, RSI {analisis['rsi']:.1f}, "
-                            f"MA50 {analisis['ma50']:.2f}, MA200 {analisis['ma200']:.2f if analisis['ma200'] else 'N/D'}, "
+                            f"MA50 {analisis['ma50']:.2f}, MA200 {str(round(analisis['ma200'],2)) if analisis['ma200'] else 'N/D'}, "
                             f"tendencia {tend_r}, piso mensual {piso_m:.2f}, piso anual {piso_anual:.2f}, "
                             f"techo {techo_y:.2f}, distancia al techo {abs(caida_anual_pct):.1f}%, "
                             f"MACD {'positivo' if macd_val_r > 0 else 'negativo'}, volumen {vol_ratio:.2f}x promedio, "
@@ -1279,7 +1291,7 @@ if "Comunidad" not in modo:
                     if analisis['color'] == 'verde':
                         conclusion_r = (f"{nombre_empresa} presenta configuración técnica favorable. "
                                         f"Soporte mensual en ${piso_m:,.2f} y anual en ${piso_anual:,.2f}. "
-                                        f"Una ruptura sostenida sobre la MA200 ${analisis['ma200']:,.2f if analisis['ma200'] else 0:.2f} confirmaría continuación alcista.")
+                                        "Una ruptura sostenida sobre la MA200 " + (f"${analisis['ma200']:,.2f}" if analisis['ma200'] else 'nivel clave') + " confirmaria continuacion alcista.")
                     elif analisis['color'] == 'rojo':
                         conclusion_r = (f"{nombre_empresa} muestra señales de debilidad. "
                                         f"Riesgo de extensión hacia el piso anual ${piso_anual:,.2f}. "
