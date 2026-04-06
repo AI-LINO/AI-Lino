@@ -782,6 +782,11 @@ if "Comunidad" not in modo:
             total_inv = st.number_input("💵 Costo Total Invertido ($):", min_value=0.01, value=5000.0)
         inversion_sim = 0.0
 
+    # ── LOGIN solo para Modo Portafolio (antes de ejecutar) ──────
+    if "Portafolio" in modo and not st.session_state.get("autenticado"):
+        pantalla_login()
+        st.stop()
+
     ejecutar = st.button("📊 Ejecutar Motor AI.lino", use_container_width=False)
 
     if ejecutar:
@@ -924,11 +929,6 @@ if "Comunidad" not in modo:
                 # MODO PORTAFOLIO — Suite VIP
                 # ─────────────────────────────
                 else:
-                    # ── LOGIN exclusivo del Modo Portafolio ──────
-                    if not st.session_state.get("autenticado"):
-                        pantalla_login()
-                        st.stop()
-
                     precio_promedio  = total_inv / cant if cant > 0 else 0
                     valor_actual     = precio_actual * cant
                     ganancia_perdida = valor_actual - total_inv
