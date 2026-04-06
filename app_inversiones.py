@@ -960,7 +960,18 @@ if "Comunidad" not in modo:
                     # Construir símbolo correcto para TradingView
                     if ticker_limpio.endswith(".MX"):
                         base = ticker_limpio.replace(".MX", "")
-                        tv_symbol = f"BMV:{base}"
+                        # Acciones con serie: GMEXICOB -> GMEXICO/B, AMXL -> AMX/L, etc.
+                        series_map = {
+                            "GMEXICOB": "GMEXICO/B",
+                            "AMXL":     "AMX/L",
+                            "BIMBOA":   "BIMBO/A",
+                            "FEMSAUBD": "FEMSA/UBD",
+                            "CEMEXCPO": "CEMEX/CPO",
+                            "GFNORTEO": "GFNORTE/O",
+                            "WALMEX":   "WALMEX",
+                            "NAFTRAC":  "NAFTRAC",
+                        }
+                        tv_symbol = f"BMV:{series_map.get(base, base)}"
                     elif ticker_limpio.endswith(".L"):
                         base = ticker_limpio.replace(".L", "")
                         tv_symbol = f"LSE:{base}"
