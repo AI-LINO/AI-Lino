@@ -957,7 +957,26 @@ if "Comunidad" not in modo:
                         v3.metric("📉 MA200 (Anual)",  "N/D")
 
                     # ── TradingView ──────────────────────────────────
-                    tv_symbol = ticker_limpio.replace(".MX", "").replace("-", "")
+                    # Construir símbolo correcto para TradingView
+                    if ticker_limpio.endswith(".MX"):
+                        base = ticker_limpio.replace(".MX", "")
+                        tv_symbol = f"BMV:{base}"
+                    elif ticker_limpio.endswith(".L"):
+                        base = ticker_limpio.replace(".L", "")
+                        tv_symbol = f"LSE:{base}"
+                    elif ticker_limpio.endswith(".DE"):
+                        base = ticker_limpio.replace(".DE", "")
+                        tv_symbol = f"XETR:{base}"
+                    elif ticker_limpio.endswith(".AS"):
+                        base = ticker_limpio.replace(".AS", "")
+                        tv_symbol = f"EURONEXT:{base}"
+                    elif ticker_limpio.endswith(".PA"):
+                        base = ticker_limpio.replace(".PA", "")
+                        tv_symbol = f"EURONEXT:{base}"
+                    elif "-USD" in ticker_limpio or "-EUR" in ticker_limpio:
+                        tv_symbol = ticker_limpio.replace("-", "")
+                    else:
+                        tv_symbol = ticker_limpio  # NASDAQ/NYSE ya funcionan directo
                     tv_widget = f"""
                     <div class="tradingview-widget-container">
                     <div id="tv_chart"></div>
@@ -1126,18 +1145,36 @@ if "Comunidad" not in modo:
                         # ── CALCULADORA DE LIQUIDACIÓN REAL ──────────
                         st.markdown("---")
                         st.markdown("### 💸 Calculadora de Liquidación Real — GBM México")
-                        st.caption("Simula cuánto efectivo limpio recibirías si vendes hoy, ya con comisión GBM y ISR.")
-                        precio_venta_sim = st.number_input(
-                            "Precio de venta a simular ($):",
-                            min_value=0.01,
-                            value=float(round(precio_actual, 2)),
-                            format="%.2f",
-                            key="precio_venta_sim"
-                        )
-                        if precio_venta_sim > 0:
-                            limpio, g_bruta, com, isr = calcular_efectivo_real(
-                                precio_venta_sim, precio_promedio, cant
+                        st.caption("Simula cuánto efectivo limpio recibirías según el precio y los títulos que quieras vender.")
+                        calc_col1, calc_col2 = st.columns(2)
+                        with calc_col1:
+                            precio_venta_sim = st.number_input(
+                                "💲 Precio de venta a simular ($):",
+                                min_value=0.01,
+                                value=float(round(precio_actual, 2)),
+                                format="%.2f",
+                                key="precio_venta_sim"
                             )
+                        with calc_col2:
+                            titulos_vender = st.number_input(
+                                "📦 Títulos que deseas vender:",
+                                min_value=0.0001,
+                                max_value=float(cant),
+                                value=float(cant),
+                                format="%0.4f",
+                                key="titulos_vender_sim",
+                                help=f"Tienes {cant:.4f} títulos en total"
+                            )
+                        if precio_venta_sim > 0 and titulos_vender > 0:
+                            # Calcular precio promedio ponderado solo de los títulos vendidos
+                            precio_compra_sim = total_inv / cant if cant > 0 else 0
+                            limpio, g_bruta, com, isr = calcular_efectivo_real(
+                                precio_venta_sim, precio_compra_sim, titulos_vender
+                            )
+                            inversion_parcial = precio_compra_sim * titulos_vender
+                            pct_venta = (titulos_vender / cant * 100) if cant > 0 else 0
+
+                            st.caption(f"Vendiendo **{titulos_vender:.4f}** títulos ({pct_venta:.1f}% de tu posición)")
                             liq1, liq2, liq3, liq4 = st.columns(4)
                             liq1.metric("💵 Efectivo Real", f"${limpio:,.2f}",
                                         help="Lo que llega a tu cuenta después de comisión e ISR")
@@ -1146,10 +1183,15 @@ if "Comunidad" not in modo:
                                         help="0.25% + IVA 16% sobre el monto de venta")
                             liq4.metric("🏛️ ISR (10%)", f"${isr:,.2f}",
                                         help="10% sobre ganancia neta")
-                            if limpio > total_inv:
-                                st.success(f"✅ Ganancia neta real después de impuestos: **${limpio - total_inv:,.2f}**")
+                            if g_bruta > 0:
+                                st.success(f"✅ Ganancia neta real después de impuestos: **${g_bruta - com - isr:,.2f}**")
+                                # Mostrar posición restante
+                                titulos_restantes = cant - titulos_vender
+                                if titulos_restantes > 0:
+                                    valor_restante = titulos_restantes * precio_actual
+                                    st.info(f"📊 Posición restante: **{titulos_restantes:.4f}** títulos · Valor actual: **${valor_restante:,.2f}**")
                             else:
-                                st.warning(f"⚠️ Después de comisiones e ISR aún estarías en pérdida neta.")
+                                st.warning(f"⚠️ Después de comisiones e ISR aún estarías en pérdida neta en esta venta.")
 
 
                 # ═══════════════════════════════════════════════
@@ -1230,95 +1272,7 @@ if "Comunidad" not in modo:
                     conclusion = (
                         f"En conclusión, {nombre_empresa} muestra señales de debilidad técnica. "
                         f"El riesgo principal es una extensión de la caída hacia el piso anual en **${piso_anual:,.2f}**. "
-                        f"Se recomienda no agregar posiciones hasta que el precio estabilice sobre su MA50 (${analisis['ma50']:,.2f})."
-                    )
-                else:
-                    conclusion = (
-                        f"En conclusión, {nombre_empresa} se encuentra en una zona de decisión. "
-                        f"El soporte más cercano es **${piso_m:,.2f}** (piso mensual). "
-                        f"El catalizador para una entrada de menor riesgo sería un cierre por encima de la MA50 (${analisis['ma50']:,.2f}) "
-                        f"con volumen superior al promedio."
-                    )
+                        f"Se recomienda no agregar posiciones hasta que el precio estabilice sobre su
+...
 
-                # Renderizar el reporte
-                st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#0d1117,#161b22); border:1px solid #30363d;
-                     border-radius:16px; padding:28px 32px; line-height:1.9; color:#e6edf3;">
-                    <p style="margin-bottom:14px;">{p1}</p>
-                    <p style="margin-bottom:14px;">{p2}</p>
-                    <p style="margin-bottom:14px;">{p3}</p>
-                    <p style="margin-bottom:0; border-top:1px solid #30363d; padding-top:14px;
-                       color:#58a6ff;">{conclusion}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Botón de voz para el reporte completo
-                reporte_completo = f"{p1} {p2} {p3} {conclusion}"
-                reporte_js = reporte_completo.replace("'", " ").replace('"', ' ').replace("**", "").replace("$", " dólares ")
-                components.html(f"""
-                <div style="text-align:right; margin-top:8px;">
-                    <button onclick="leerReporte()" title="Escuchar reporte completo"
-                        style="background:#30363d; border:1px solid #58a6ff; border-radius:8px;
-                        padding:8px 16px; color:#58a6ff; font-size:0.9rem; cursor:pointer;">
-                        🔊 Escuchar reporte completo
-                    </button>
-                </div>
-                <script>
-                function leerReporte() {{
-                    if ('speechSynthesis' in window) {{
-                        window.speechSynthesis.cancel();
-                        var u = new SpeechSynthesisUtterance('{reporte_js}');
-                        u.lang = 'es-MX'; u.rate = 0.92; u.pitch = 1.0;
-                        var voices = window.speechSynthesis.getVoices();
-                        var esp = voices.find(v => v.lang && v.lang.startsWith('es'));
-                        if (esp) u.voice = esp;
-                        window.speechSynthesis.speak(u);
-                    }}
-                }}
-                window.speechSynthesis.getVoices();
-                </script>
-                """, height=60)
-
-            except Exception as e:
-                st.error(f"⚠️ Error inesperado: {e}")
-                st.info("Verifica que el símbolo sea correcto. Ejemplos: TSLA, AAPL, BTC-USD, GMEXICOB.MX, ETH-USD, SOL-USD")
-
-# ═══════════════════════════════════════════════
-# COMUNIDAD
-# ═══════════════════════════════════════════════
-else:
-    st.markdown("## 🤝 Comunidad de Estrategias AI.lino")
-    st.caption("Comparte y aprende de las mejores jugadas de la comunidad.")
-
-    col_c1, col_c2 = st.columns([1, 2])
-
-    with col_c1:
-        st.markdown("### 📝 Publica tu Estrategia")
-        with st.form("crear_estrategia"):
-            autor      = st.text_input("Tu Nombre o Nickname:", placeholder="ej. Lobo de Wall Street")
-            activo     = st.text_input("Activo / Símbolo:", placeholder="ej. BTC-USD, GMEXICO, S&P 500").upper()
-            cat_comm   = st.selectbox("Categoría:", list(narrativas.keys()))
-            estrategia = st.text_area("Tu Estrategia Detallada:", placeholder="ej. Comprar si rompe la resistencia de los $X, buscando el techo en $Y. Stop Loss en $Z.", height=120)
-            publicar   = st.form_submit_button("📢 Publicar en Comunidad")
-            if publicar:
-                if autor and activo and estrategia:
-                    st.session_state['community_strategies'].insert(0, {
-                        'autor': autor, 'activo': activo,
-                        'categoria': cat_comm, 'estrategia': estrategia,
-                        'fecha': str(datetime.date.today())
-                    })
-                    st.success("✅ Estrategia publicada.")
-                    st.rerun()
-                else:
-                    st.warning("Completa todos los campos antes de publicar.")
-
-    with col_c2:
-        st.markdown("### 📡 Feed de Estrategias Públicas")
-        for estr in st.session_state['community_strategies']:
-            st.markdown(f"""
-            <div class="strategy-card">
-                <b>👤 Autor: {estr['autor']}</b><br>
-                <small>Activo: {estr['activo']} | Categoría: {estr.get('categoria', '—')} | Publicado: {estr['fecha']}</small><br><br>
-                {estr['estrategia']}
-            </div>
-            """, unsafe_allow_html=True)
+[Mensaje acortado]  Ver mensaje completo
