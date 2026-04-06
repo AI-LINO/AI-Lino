@@ -827,117 +827,130 @@ if "Comunidad" not in modo:
 
                     st.markdown("---")
 
-                    # ── ESCALONES DE SOPORTE ─────────────────────────
-                    piso_roto = precio_actual < piso_m
-                    st.markdown("## 🪜 Mapa de Escalones de Soporte")
+                    # ═══════════════════════════════════════════════════
+                    # CENTRO DE COMANDO — RESCATE INTELIGENTE AI.lino
+                    # Fusión de: Mapa de Escalones + Motor de Rescate
+                    # ═══════════════════════════════════════════════════
+                    ma200_val    = analisis.get("ma200")
+                    narrativa_sc = narrativas[categoria]
+                    piso_roto    = precio_actual < piso_m
 
-                    if piso_roto:
-                        st.error(f"⚠️ El precio **${precio_actual:,.2f}** rompió el Piso Mensual **${piso_m:,.2f}**. Aquí están los siguientes niveles reales de soporte hasta el piso anual.")
-                    else:
-                        st.info(f"✅ El Piso Mensual **${piso_m:,.2f}** aún se mantiene. Los escalones de abajo son tus zonas de alerta si se rompe.")
+                    st.markdown("## 🎯 Centro de Comando — Rescate Inteligente AI.lino")
 
-                    escalones = calcular_escalones(df_1y, precio_actual, piso_m, piso_anual, narrativas[categoria], cant if cant > 0 else 1, total_inv if total_inv > 0 else precio_actual)
-
-                    if escalones:
-                        st.caption(f"📌 Escalones calculados con los mínimos reales de cada mes · Vinculados con la Sala de Simulación · Objetivo: **{narrativas[categoria]['nombre_meta']}**")
-                        for esc in escalones:
-                            css_class = "escalon-activo" if esc["estado"] == "activo" else "escalon-pendiente"
-                            st.markdown(f"""
-                            <div class="escalon-card {css_class}" style="border-left-color: {esc['nivel_color']};">
-                                <b style="color:{esc['nivel_color']};">{esc['nivel_nombre']}</b>
-                                &nbsp;·&nbsp; <b>Soporte: ${esc['precio']:,.2f}</b>
-                                &nbsp;·&nbsp; <small style="color:#8b949e;">Mínimo de {esc['nombre_mes']}</small><br>
-                                {esc['alerta']}<br>
-                                <small>
-                                💵 Si entras aquí: inyectar <b>${esc['capital_extra']:,.2f}</b>
-                                &nbsp;·&nbsp; Nuevo promedio: <b>${esc['nuevo_promedio']:,.2f}</b>
-                                &nbsp;·&nbsp; Meta {narrativas[categoria]['nombre_meta']}: <b>${esc['precio_meta']:,.2f}</b>
-                                &nbsp;→&nbsp; Ganancia estimada: <b>${esc['ganancia_meta']:,.2f}</b>
-                                </small>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.warning("No hay suficiente historial mensual para calcular escalones.")
-
-                    st.markdown("---")
-
-                    # ── MOTOR DE RESCATE ─────────────────────────────
+                    # ── Resumen de situación actual ───────────────────
                     if rendimiento < 0:
-                        rescate = calcular_rescate(cant, total_inv, precio_actual, categoria, techo_y, piso_m)
+                        col_sit1, col_sit2, col_sit3 = st.columns(3)
+                        col_sit1.metric("📉 Pérdida actual",
+                                        f"${abs(valor_actual - total_inv):,.2f}",
+                                        delta=f"{rendimiento:.1f}%")
+                        col_sit2.metric("💰 Tu promedio de compra", f"${precio_promedio:,.2f}")
+                        col_sit3.metric("📌 Precio actual",
+                                        f"${precio_actual:,.2f}",
+                                        delta=f"{((precio_actual/precio_promedio)-1)*100:.1f}%")
 
-                        if rescate:
-                            st.markdown("## 🛡️ Motor de Rescate AI.lino")
-                            st.error(f"📉 Pérdida actual: **${abs(rescate['perdida_actual']):,.2f}** ({rescate['pct_perdida']:.1f}%)")
+                        # ── Escudo de contexto ─────────────────────────
+                        if piso_roto:
+                            st.error(f"🚨 **PISO MENSUAL ROTO** — El precio **${precio_actual:,.2f}** ya está por debajo del piso de **${piso_m:,.2f}**. Operar ahora es de alto riesgo. Usa los escalones de abajo como guía.")
+                        else:
+                            dist_piso_pct = ((precio_actual - piso_m) / precio_actual) * 100
+                            color_piso = "🟢" if dist_piso_pct > 5 else "🟡"
+                            st.info(f"{color_piso} **Piso mensual ${piso_m:,.2f} aún se mantiene** · Distancia: {dist_piso_pct:.1f}% · Stop Loss sugerido: **${piso_m * 0.97:,.2f}** (3% bajo el piso)")
 
-                            st.markdown(f"""
-                            <div class="card">
-                                <b>Filosofía: {rescate['narrativa']['estilo']}</b><br>
-                                {rescate['narrativa']['mensaje']}
-                            </div>
-                            """, unsafe_allow_html=True)
+                        # Filosofía Lynch
+                        st.markdown(f"""
+                        <div class="card">
+                            <b>📖 Filosofía activa: {narrativa_sc['estilo']}</b><br>
+                            <span style="color:#8b949e;">{narrativa_sc['mensaje']}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                            col_s1, col_s2 = st.columns(2)
-                            with col_s1:
-                                dist_color = "🟢" if rescate['distancia_piso'] > 5 else "🔴"
-                                st.info(
-                                    f"{dist_color} **Piso mensual:** ${rescate['piso_m']:,.2f} · "
-                                    f"Distancia: {rescate['distancia_piso']:.1f}% abajo"
-                                )
-                            with col_s2:
-                                st.warning(
-                                    f"🛑 **Stop Loss sugerido:** ${rescate['stop_loss']:,.2f} "
-                                    f"(3% bajo el piso mensual)"
-                                )
+                        st.markdown("---")
 
-                            st.markdown("### 🎯 Sala de Simulación — 3 Niveles de Rescate")
-                            st.caption(
-                                f"Objetivo de salida: **{rescate['narrativa']['nombre_meta']}** "
-                                f"({rescate['narrativa']['meta_pct'] * 100 - 100:.0f}% sobre tu nuevo promedio)"
-                            )
+                        # ── Escalones integrados con simulación ────────
+                        st.markdown("### 🪜 Mapa de Escalones → Simulación por Nivel")
+                        st.caption(f"Cada escalón = mínimo real de un mes · Objetivo de salida: **{narrativa_sc['nombre_meta']}** ({narrativa_sc['meta_pct']*100-100:.0f}%)")
 
-                            for nivel in rescate['niveles']:
-                                color_borde = "#2ea043" if "Conservador" in nivel['nombre'] else ("#d29922" if "Moderado" in nivel['nombre'] else "#f85149")
+                        escalones = calcular_escalones(df_1y, precio_actual, piso_m, piso_anual,
+                                                       narrativa_sc, cant if cant > 0 else 1,
+                                                       total_inv if total_inv > 0 else precio_actual)
+
+                        if escalones:
+                            for esc in escalones:
+                                # Verificar si este nivel cae en trampa MA200
+                                es_trampa = (ma200_val is not None and esc["nuevo_promedio"] > ma200_val)
+
+                                if es_trampa:
+                                    borde_color = "#8b0000"
+                                    badge_trampa = f'<span style="background:#8b0000; color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem; font-weight:700;">⚠️ TRAMPA MA200</span>'
+                                    bg_card = "background: linear-gradient(135deg, #2d0a0a, #1c1010);"
+                                else:
+                                    borde_color = esc["nivel_color"]
+                                    badge_trampa = ""
+                                    bg_card = "background: #1c2128;"
+
+                                # Badge de alerta de precio
+                                if "PRECIO EN ZONA" in esc["alerta"]:
+                                    badge_alerta = f'<span style="background:#f85149; color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem;">🔴 DECIDIR AHORA</span>'
+                                elif "CERCA" in esc["alerta"]:
+                                    badge_alerta = f'<span style="background:#d29922; color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem;">🟡 PREPARAR CAPITAL</span>'
+                                else:
+                                    badge_alerta = f'<span style="background:#1f3a5c; color:#58a6ff; padding:2px 8px; border-radius:6px; font-size:0.8rem;">🔵 {esc["alerta"].split("A ")[1] if "A " in esc["alerta"] else "En espera"}</span>'
+
+                                # Veredicto del nivel
+                                if es_trampa:
+                                    veredicto_html = f"""
+                                    <div style="margin-top:8px; padding:8px 12px; background:#3d0000; border-radius:8px; border:1px solid #8b0000;">
+                                        ⛔ <b>NIVEL NO RECOMENDADO:</b> Tu nuevo promedio <b>${esc['nuevo_promedio']:,.2f}</b>
+                                        quedaría <b>ARRIBA de la MA200 (${ma200_val:,.2f})</b>.<br>
+                                        <span style="color:#ff9999;">El precio chocará con esa resistencia antes de que puedas salir en tablas. Espera un escalón más abajo.</span>
+                                    </div>"""
+                                else:
+                                    veredicto_html = f"""
+                                    <div style="margin-top:8px; padding:8px 12px; background:#0d2b1a; border-radius:8px; border:1px solid #2ea043;">
+                                        ✅ <b>NIVEL VIABLE:</b> Tu nuevo promedio <b>${esc['nuevo_promedio']:,.2f}</b>
+                                        {f"quedaría BAJO la MA200 (${ma200_val:,.2f}) — camino libre hacia el objetivo." if ma200_val else "— sin resistencia MA200 detectada."}
+                                    </div>"""
+
                                 st.markdown(f"""
-                                <div class="rescate-card" style="border-left-color: {color_borde};">
-                                    <b>{nivel['nombre']}</b><br>
-                                    💵 Capital a inyectar: <b>${nivel['capital_extra']:,.2f}</b> &nbsp;·&nbsp;
-                                    Títulos nuevos: <b>{nivel['nuevos_titulos']:.4f}</b><br>
-                                    📊 Nuevo promedio: <b>${nivel['nuevo_promedio']:,.2f}</b>
-                                    &nbsp;(antes: <b>${rescate['precio_promedio']:,.2f}</b>) &nbsp;·&nbsp;
-                                    Reducción: <b>{nivel['distancia_a_tablas']:.1f}% a tablas</b><br>
-                                    🎯 {rescate['narrativa']['nombre_meta']}:
-                                    <b>${nivel['precio_meta']:,.2f}</b> &nbsp;→&nbsp;
-                                    Ganancia neta: <b>${nivel['ganancia_en_meta']:,.2f}</b>
+                                <div class="escalon-card" style="{bg_card} border-left: 6px solid {borde_color}; margin-bottom:14px;">
+                                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
+                                        <b style="color:{borde_color}; font-size:1rem;">{esc['nivel_nombre']}</b>
+                                        {badge_alerta}
+                                        {badge_trampa}
+                                    </div>
+                                    <div style="color:#8b949e; font-size:0.85rem; margin-bottom:8px;">
+                                        📍 Soporte histórico: <b style="color:#e6edf3;">${esc['precio']:,.2f}</b>
+                                        &nbsp;·&nbsp; Mínimo de <b style="color:#e6edf3;">{esc['nombre_mes']}</b>
+                                        &nbsp;·&nbsp; A <b style="color:#e6edf3;">{esc['dist_pct']:.1f}%</b> del precio actual
+                                    </div>
+                                    <div style="font-size:0.92rem; line-height:1.9;">
+                                        💵 Capital a inyectar: <b>${esc['capital_extra']:,.2f}</b>
+                                        &nbsp;·&nbsp; Títulos nuevos: <b>{esc['nuevos_titulos']:.4f}</b><br>
+                                        📊 Nuevo promedio: <b>${esc['nuevo_promedio']:,.2f}</b>
+                                        &nbsp;·&nbsp; Reducción vs hoy: <b>{((esc['nuevo_promedio']/precio_promedio)-1)*100:.1f}%</b><br>
+                                        🎯 Meta {narrativa_sc['nombre_meta']}: <b>${esc['precio_meta']:,.2f}</b>
+                                        &nbsp;→&nbsp; Ganancia estimada: <b>${esc['ganancia_meta']:,.2f}</b>
+                                    </div>
+                                    {veredicto_html}
                                 </div>
                                 """, unsafe_allow_html=True)
+                        else:
+                            st.warning("No hay suficiente historial mensual para calcular escalones.")
 
-                            # ── ALERTA MA200 por nivel de rescate ────
-                            ma200_val = analisis.get('ma200')
-                            if ma200_val is not None:
-                                for nivel in rescate['niveles']:
-                                    if nivel['nuevo_promedio'] > ma200_val:
-                                        st.warning(
-                                            f"⚠️ **Atención en {nivel['nombre']}:** "
-                                            f"Tu nuevo promedio **${nivel['nuevo_promedio']:,.2f}** "
-                                            f"quedaría ARRIBA de la MA200 **${ma200_val:,.2f}**. "
-                                            f"La recuperación puede ser lenta y pesada — el precio tendrá esa resistencia encima."
-                                        )
-
-                            st.warning(f"⚠️ **Consejo Lynch:** {rescate['narrativa']['consejo']}")
+                        st.markdown("---")
+                        st.warning(f"💡 **Consejo Lynch — {narrativa_sc['estilo']}:** {narrativa_sc['consejo']}")
 
                     elif rendimiento > 0:
                         st.success(f"🎉 **¡En ganancia! +${ganancia_perdida:,.2f} ({rendimiento:.2f}%)**")
-
-                        narrativa    = narrativas[categoria]
-                        precio_meta  = precio_promedio * narrativa["meta_pct"]
-                        if precio_actual >= precio_meta:
+                        precio_meta_obj = precio_promedio * narrativa_sc["meta_pct"]
+                        if precio_actual >= precio_meta_obj:
                             st.balloons()
-                            st.success(f"🏆 **¡Alcanzaste el objetivo {narrativa['nombre_meta']}!** Considera tomar ganancias parciales.")
+                            st.success(f"🏆 **¡Alcanzaste el objetivo {narrativa_sc['nombre_meta']}!** Considera tomar ganancias parciales.")
                         else:
-                            falta = precio_meta - precio_actual
+                            falta = precio_meta_obj - precio_actual
                             st.info(
-                                f"🎯 Objetivo {narrativa['nombre_meta']}: **${precio_meta:,.2f}** · "
-                                f"Faltan **${falta:,.2f}** ({((precio_meta / precio_actual) - 1) * 100:.1f}%)"
+                                f"🎯 Objetivo {narrativa_sc['nombre_meta']}: **${precio_meta_obj:,.2f}** · "
+                                f"Faltan **${falta:,.2f}** ({((precio_meta_obj / precio_actual) - 1) * 100:.1f}%)"
                             )
 
             except Exception as e:
