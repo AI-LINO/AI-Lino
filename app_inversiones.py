@@ -964,7 +964,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🚀 Herramientas de Élite")
-    st.link_button("Ir a AI.Lino PRO (Viterbi)", "https://ailinopro-maquina-dinero-lino.streamlit.app/",
+    st.link_button("Ir a AI.Lino PRO (Viterbi)", "https://ailinotradingpro.streamlit.app/",
                    use_container_width=True)
     st.caption("Usa el Motor Pro para confirmar señales de entrada y salida con precisión HMM.")
     st.markdown("---")
